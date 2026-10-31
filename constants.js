@@ -1,11 +1,11 @@
 // Single place for every tunable gameplay number (spec section 15).
 // Nothing gameplay-critical may be a magic number elsewhere.
 
-export const PLAYER_MAX_FLICK_SPEED = 12; // u/s, Vmax
+export const PLAYER_MAX_FLICK_SPEED = 24; // u/s, Vmax (issue #3 fix 2 x2.0; was 12)
 export const FULL_CHARGE_TIME = 1.5; // s, T
-export const SPEED_CLAMP = 20; // u/s, Vclamp hard cap
+export const SPEED_CLAMP = 40; // u/s, Vclamp hard cap (issue #3 fix 2 x2.0; was 20)
 
-export const PLAYER_GROUND_DRAG = 0.5; // linearDamping while grounded
+export const PLAYER_GROUND_DRAG = 0.15; // linearDamping while grounded (issue #3 fix 1; was 0.5)
 export const PLAYER_AIR_DRAG = 0.1; // linearDamping while airborne
 export const BOSS_GROUND_DRAG = 0.1; // efficient roller (boss arrives later)
 export const PLAYER_ANGULAR_DAMPING = 0.4; // tips wobble instead of vaulting
@@ -16,8 +16,8 @@ export const SWORD_MASS = 1.0;
 export const HAMMER_MASS = 2.0;
 
 export const BOSS_MASS = 2.0;
-export const BOSS_BUMP_SPEED = 5; // u/s
-export const BOSS_ROLL_SPEED = 2.5; // u/s mid of 2-3 range
+export const BOSS_BUMP_SPEED = 10; // u/s (issue #3 fix 2 x2.0; was 5)
+export const BOSS_ROLL_SPEED = 5; // u/s mid of 2-3 range x2.0 (issue #3 fix 2; was 2.5)
 export const BOSS_HP = 3;
 export const BUMP_INTERVAL = 4; // s fixed rhythm
 export const WINDUP_DURATION = 1; // s, must be < arena-crossing time
