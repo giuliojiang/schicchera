@@ -99,6 +99,31 @@ export function playFlick(strength01) {
   }
 }
 
+// Weapon pickup: bright chime, pitch rises with each consecutive pickup.
+export function playPickup(count) {
+  const ac = ensureAudio();
+  if (!ac) return;
+  try {
+    const t = ac.currentTime;
+    const base = 660 * (1 + 0.25 * count);
+    for (const [i, mult] of [[0, 1], [1, 1.5]]) {
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = 'sine';
+      const at = t + i * 0.09;
+      osc.frequency.setValueAtTime(base * mult, at);
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.22, at + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.3);
+      osc.connect(gain).connect(ac.destination);
+      osc.start(at);
+      osc.stop(at + 0.35);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 // Collision thud, volume scaled by impact velocity.
 export function playThud(impact) {
   const ac = ctx || ensureAudio();

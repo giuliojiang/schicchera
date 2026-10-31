@@ -1,19 +1,35 @@
 // Boot, input, camera follow/aim, charge/flick loop, fixed-step physics.
 import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
 import {
   CAMERA_DISTANCE,
   CAMERA_HEIGHT,
   CAMERA_LERP,
+  FOG_ARENA,
+  FOG_BEACH,
+  FOG_DENSITY,
+  FOG_FOREST,
+  FOG_LERP_SPEED,
+  FOG_PASS,
+  FOG_VILLAGE,
   FULL_CHARGE_TIME,
   LAUNCH_STRETCH_TIME,
   MAX_FRAME_DT,
   ORBIT_SPEED,
+  PICKUP_TOUCH_DIST,
+  PICKUPS,
   PLAYER_MAX_FLICK_SPEED,
   SPEED_CLAMP,
   SQUASH_XZ,
   SQUASH_Y,
+  SUN_OFFSET,
+  ZONE_ARENA,
+  ZONE_BEACH,
+  ZONE_FOREST,
+  ZONE_PASS,
+  ZONE_VILLAGE,
 } from './constants.js';
-import { applyFlickVelocity, chargeFraction, clampSpeed, flickSpeed } from './game.js';
+import { applyFlickVelocity, chargeFraction, clampSpeed, flickSpeed, zoneOf } from './game.js';
 import {
   applyDrag,
   createPlayerBody,
@@ -22,8 +38,16 @@ import {
   createWorld,
   isGrounded,
 } from './physics.js';
-import { buildLevel, buildLights, buildPlayerMesh } from './level.js';
-import { ensureAudio, playFlick, playThud, startCharge, stopCharge, updateCharge } from './audio.js';
+import { attachWeapon, buildLevel, buildLights, buildPickup, buildPlayerMesh } from './level.js';
+import {
+  ensureAudio,
+  playFlick,
+  playPickup,
+  playThud,
+  startCharge,
+  stopCharge,
+  updateCharge,
+} from './audio.js';
 
 const app = document.getElementById('app');
 
@@ -39,18 +63,27 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0e1626);
-scene.fog = new THREE.Fog(0x0e1626, 24, 70);
-buildLights(scene);
-buildLevel(scene);
+scene.background = new THREE.Color(FOG_VILLAGE);
+scene.fog = new THREE.FogExp2(FOG_VILLAGE, FOG_DENSITY);
+const { sun } = buildLights(scene);
+const { lavaMats } = buildLevel(scene);
 const playerMesh = buildPlayerMesh();
 scene.add(playerMesh);
+
+// Weapon pickups: dagger at the plaza, sword on the beach, hammer in the forest.
+const pickups = PICKUPS.map(([id, x, baseY, z], i) => {
+  const { group, glintMats } = buildPickup(id, baseY);
+  group.position.set(x, baseY, z);
+  scene.add(group);
+  return { id, group, glintMats, baseY, taken: false, phase: i * 2.1 };
+});
+const pieces = [];
 
 const camera = new THREE.PerspectiveCamera(
   60,
   window.innerWidth / window.innerHeight,
   0.1,
-  200
+  400
 );
 
 // Physics.
@@ -78,6 +111,23 @@ let grounded = false;
 let phase = 'playing'; // playing | won | lost (boss later)
 let frames = 0;
 let lastDt = 0;
+let zone = 'village';
+let animT = 0;
+
+const ZONES = {
+  village: ZONE_VILLAGE,
+  beach: ZONE_BEACH,
+  forest: ZONE_FOREST,
+  pass: ZONE_PASS,
+  arena: ZONE_ARENA,
+};
+const FOG_COLORS = {
+  village: new THREE.Color(FOG_VILLAGE),
+  beach: new THREE.Color(FOG_BEACH),
+  forest: new THREE.Color(FOG_FOREST),
+  pass: new THREE.Color(FOG_PASS),
+  arena: new THREE.Color(FOG_ARENA),
+};
 
 function flickDirection(out) {
   // Camera horizontal forward: player minus camera, projected to ground.
@@ -196,6 +246,48 @@ function updateSquash(dt) {
   s.z += (1 - s.z) * Math.min(1, dt * 10);
 }
 
+function updateWorld(dt) {
+  animT += dt;
+  const px = playerBody.position.x;
+  const py = playerBody.position.y;
+  const pz = playerBody.position.z;
+
+  // Fog follows the zone: the atmosphere itself changes palette.
+  zone = zoneOf(px, pz, ZONES);
+  const k = 1 - Math.exp(-FOG_LERP_SPEED * dt);
+  scene.fog.color.lerp(FOG_COLORS[zone], k);
+  scene.background.lerp(FOG_COLORS[zone], k);
+
+  // Shadow-casting sun follows the player so shadows stay crisp anywhere.
+  sun.position.set(px + SUN_OFFSET[0], py + SUN_OFFSET[1], pz + SUN_OFFSET[2]);
+  sun.target.position.set(px, 0, pz);
+  sun.target.updateMatrixWorld();
+
+  // Lava breathes (emissive pulse; the only saturated color in the game).
+  const lavaGlow = 1.8 + 0.5 * Math.sin(animT * 2.2);
+  for (const m of lavaMats) m.emissiveIntensity = lavaGlow;
+
+  // Pickups bob, spin, and glint until collected.
+  for (const p of pickups) {
+    if (p.taken) continue;
+    p.group.position.y = p.baseY + Math.sin(animT * 2 + p.phase) * 0.15;
+    p.group.rotation.y += dt * 1.2;
+    const glint = 0.7 + 0.5 * Math.sin(animT * 3 + p.phase);
+    for (const m of p.glintMats) m.emissiveIntensity = glint;
+    // Touch to collect: attach mesh + collider + mass, chime rising per piece.
+    const dx = px - p.group.position.x;
+    const dy = py - p.group.position.y;
+    const dz = pz - p.group.position.z;
+    if (dx * dx + dy * dy + dz * dz < PICKUP_TOUCH_DIST * PICKUP_TOUCH_DIST) {
+      p.taken = true;
+      scene.remove(p.group);
+      attachWeapon(THREE, CANNON, playerMesh, playerBody, p.id);
+      playPickup(pieces.length);
+      pieces.push(p.id);
+    }
+  }
+}
+
 let lastTime = performance.now();
 
 function frame(now) {
@@ -210,6 +302,7 @@ function frame(now) {
     stepper.step(dt);
     grounded = isGrounded(world, playerBody, groundBodies);
     applyDrag(playerBody, grounded, false);
+    updateWorld(dt);
 
     // Sync visual.
     playerMesh.position.set(playerBody.position.x, playerBody.position.y, playerBody.position.z);
@@ -265,6 +358,9 @@ if (params.has('debug') || params.has('autoplay')) {
           frames,
           lastDt,
           orbitAngle,
+          zone,
+          pieces: [...pieces],
+          pickups: pickups.map((p) => ({ id: p.id, taken: p.taken })),
         }),
         actions: { beginCharge, releaseFlick },
         params,

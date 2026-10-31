@@ -5,12 +5,13 @@ game guides only through visuals, sound, and physics behavior.
 
 Spec: [issue #1](https://github.com/giuliojiang/schicchera/issues/1)
 
-## Current state: movement core
+## Current state: movement core + world
 
-Cube character, orbit-to-aim follow camera, charge-and-flick movement
+Cube character with a face, orbit-to-aim follow camera, charge-and-flick movement
 (quadratic charge, additive velocity, speed clamp), ground/air drag switching,
-fixed-timestep physics, minimal arena (walls + ramps), synthesized audio,
-`?debug=1` state bridge. No build step.
+fixed-timestep physics, full hub-and-spoke world (village hub, beach, forest,
+mountain pass, boss arena), collectible weapons that attach with mass +
+colliders, per-zone fog, synthesized audio, `?debug=1` state bridge. No build step.
 
 ## Run it
 

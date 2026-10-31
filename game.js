@@ -30,6 +30,24 @@ export function clampSpeed(vx, vy, vz, vclamp) {
   return [vx * k, vy * k, vz * k];
 }
 
+// Zone lookup for fog color and debug info. Pure: rects passed in as data.
+// Order matters: pass and arena are looked up before the village they border.
+export function zoneOf(x, z, zones) {
+  if (x >= zones.arena.x0 && x <= zones.arena.x1 && z >= zones.arena.z0 && z <= zones.arena.z1) {
+    return 'arena';
+  }
+  if (x >= zones.pass.x0 && x <= zones.pass.x1 && z >= zones.pass.z0 && z <= zones.pass.z1) {
+    return 'pass';
+  }
+  if (x >= zones.forest.x0 && x <= zones.forest.x1 && z >= zones.forest.z0 && z <= zones.forest.z1) {
+    return 'forest';
+  }
+  if (x >= zones.beach.x0 && x <= zones.beach.x1 && z >= zones.beach.z0 && z <= zones.beach.z1) {
+    return 'beach';
+  }
+  return 'village';
+}
+
 // Seeded RNG (mulberry32) for any future gameplay randomness.
 export function mulberry32(seed) {
   let a = seed >>> 0;

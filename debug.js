@@ -39,14 +39,16 @@ export function initDebug(ctx) {
           +playerBody.velocity.z.toFixed(4),
         ],
         mass: +playerBody.mass.toFixed(4),
-        hp: 1,
-        pieces: [],
+        hp: 1 + s.pieces.length,
+        pieces: s.pieces,
       },
       boss: null,
       charge01: +s.charge01.toFixed(4),
       charging: !!s.charging,
       grounded: !!s.grounded,
       phase: s.phase,
+      zone: s.zone,
+      pickups: s.pickups,
       orbitAngle: +s.orbitAngle.toFixed(4),
       frames: s.frames,
       lastDtMs: +(s.lastDt * 1000).toFixed(2),
@@ -73,6 +75,14 @@ export function initDebug(ctx) {
       seed = n >>> 0;
       rng = mulberry32(seed);
       return seed;
+    },
+    teleport(x, z, y = 2) {
+      // Dev-only level inspection: drop the player at (x, z).
+      playerBody.position.set(x, y, z);
+      playerBody.velocity.set(0, 0, 0);
+      playerBody.angularVelocity.set(0, 0, 0);
+      playerBody.wakeUp();
+      return snapshot();
     },
     get rngSample() {
       return rng();
