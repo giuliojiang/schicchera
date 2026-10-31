@@ -50,6 +50,8 @@ export function initDebug(ctx) {
       zone: s.zone,
       pickups: s.pickups,
       orbitAngle: +s.orbitAngle.toFixed(4),
+      cam: s.cam,
+      anchor: s.anchor,
       frames: s.frames,
       lastDtMs: +(s.lastDt * 1000).toFixed(2),
       screen: playerScreen(),

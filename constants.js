@@ -24,7 +24,12 @@ export const WINDUP_DURATION = 1; // s, must be < arena-crossing time
 
 export const CAMERA_DISTANCE = 8;
 export const CAMERA_HEIGHT = 5;
-export const CAMERA_LERP = 5; // 1/s follow smoothing
+export const CAMERA_ANCHOR_RATE = 4; // 1/s anchor easing toward player XZ (issue #7)
+export const CAMERA_DEADZONE = 0.75; // units, anchor deadzone (issue #7)
+export const CAMERA_HEIGHT_RATE = 2; // 1/s smoothed-ground easing while grounded (issue #7)
+export const CAMERA_LOOKAHEAD_TIME = 0.15; // s of smoothed velocity added to gaze (issue #7)
+export const CAMERA_LOOKAHEAD_MAX = 1.5; // units, gaze lookahead clamp (issue #7)
+export const CAMERA_VEL_RATE = 6; // 1/s low-pass on lookahead velocity (issue #7)
 export const ORBIT_SPEED = 2.2; // rad/s for A/D
 
 export const DAMAGE_FLASH_TIME = 0.3; // s

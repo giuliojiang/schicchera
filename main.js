@@ -2,9 +2,14 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import {
+  CAMERA_ANCHOR_RATE,
+  CAMERA_DEADZONE,
   CAMERA_DISTANCE,
   CAMERA_HEIGHT,
-  CAMERA_LERP,
+  CAMERA_HEIGHT_RATE,
+  CAMERA_LOOKAHEAD_MAX,
+  CAMERA_LOOKAHEAD_TIME,
+  CAMERA_VEL_RATE,
   FOG_ARENA,
   FOG_BEACH,
   FOG_DENSITY,
@@ -219,24 +224,59 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Camera desired position from orbit angle.
-const desired = new THREE.Vector3();
+// Camera channels (issue #7): yaw is direct (aiming), everything else eased.
+// Anchor = smoothed XZ orbit center with a deadzone; height follows the
+// smoothed ground level, never air height; gaze looks at the anchor plus a
+// small clamped lookahead. Never the raw player position.
 const lookTarget = new THREE.Vector3();
+let anchorX = playerBody.position.x;
+let anchorZ = playerBody.position.z;
+let smoothGround = playerBody.position.y;
+let smoothVelX = 0;
+let smoothVelZ = 0;
 
 function updateCamera(dt) {
+  // Yaw: direct, always. Any lag here would mis-aim flicks.
   if (input.left) orbitAngle += ORBIT_SPEED * dt;
   if (input.right) orbitAngle -= ORBIT_SPEED * dt;
   const px = playerBody.position.x;
   const py = playerBody.position.y;
   const pz = playerBody.position.z;
-  desired.set(
-    px + Math.sin(orbitAngle) * CAMERA_DISTANCE,
-    py + CAMERA_HEIGHT,
-    pz + Math.cos(orbitAngle) * CAMERA_DISTANCE
+
+  // Anchor: ease toward player XZ only outside the deadzone.
+  const dx = px - anchorX;
+  const dz = pz - anchorZ;
+  if (Math.hypot(dx, dz) > CAMERA_DEADZONE) {
+    const k = 1 - Math.exp(-CAMERA_ANCHOR_RATE * dt);
+    anchorX += dx * k;
+    anchorZ += dz * k;
+  }
+
+  // Height: ease toward player Y while grounded, hold in the air.
+  if (grounded) {
+    const k = 1 - Math.exp(-CAMERA_HEIGHT_RATE * dt);
+    smoothGround += (py - smoothGround) * k;
+  }
+
+  // Lookahead velocity: low-passed so bounce spikes never reach the gaze.
+  const kv = 1 - Math.exp(-CAMERA_VEL_RATE * dt);
+  smoothVelX += (playerBody.velocity.x - smoothVelX) * kv;
+  smoothVelZ += (playerBody.velocity.z - smoothVelZ) * kv;
+  let lhX = smoothVelX * CAMERA_LOOKAHEAD_TIME;
+  let lhZ = smoothVelZ * CAMERA_LOOKAHEAD_TIME;
+  const lhLen = Math.hypot(lhX, lhZ);
+  if (lhLen > CAMERA_LOOKAHEAD_MAX) {
+    const s = CAMERA_LOOKAHEAD_MAX / lhLen;
+    lhX *= s;
+    lhZ *= s;
+  }
+
+  camera.position.set(
+    anchorX + Math.sin(orbitAngle) * CAMERA_DISTANCE,
+    smoothGround + CAMERA_HEIGHT,
+    anchorZ + Math.cos(orbitAngle) * CAMERA_DISTANCE
   );
-  const k = 1 - Math.exp(-CAMERA_LERP * dt);
-  camera.position.lerp(desired, frames === 0 ? 1 : k);
-  lookTarget.set(px, py, pz);
+  lookTarget.set(anchorX + lhX, smoothGround, anchorZ + lhZ);
   camera.lookAt(lookTarget);
 }
 
@@ -391,6 +431,8 @@ if (params.has('debug') || params.has('autoplay')) {
           frames,
           lastDt,
           orbitAngle,
+          cam: [+camera.position.x.toFixed(4), +camera.position.y.toFixed(4), +camera.position.z.toFixed(4)],
+          anchor: [+anchorX.toFixed(4), +smoothGround.toFixed(4), +anchorZ.toFixed(4)],
           zone,
           pieces: [...pieces],
           pickups: pickups.map((p) => ({ id: p.id, taken: p.taken })),
