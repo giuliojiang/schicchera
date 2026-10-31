@@ -21,3 +21,47 @@ html, body {
   width: 100%;
   height: 100%;
 }
+
+/* End screens: icon pictograms only, no text (spec section 11). */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 4, 2, 0.72);
+  z-index: 10;
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.overlay.victory {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.icon-btn {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 3px solid #f2e6c8;
+  background: rgba(20, 14, 10, 0.6);
+  color: #f2e6c8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.icon-btn:hover {
+  background: rgba(60, 40, 24, 0.8);
+}

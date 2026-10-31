@@ -6,12 +6,12 @@ let seed = 1;
 let rng = mulberry32(seed);
 
 export function initDebug(ctx) {
-  const { THREE, renderer, camera, world, playerBody, input, getState, actions, params } = ctx;
+  const { THREE, renderer, camera, world, playerBody, bossBody, input, getState, actions, params } = ctx;
 
   const tmpV = new THREE.Vector3();
 
-  function playerScreen() {
-    tmpV.set(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+  function bodyScreen(body) {
+    tmpV.set(body.position.x, body.position.y, body.position.z);
     tmpV.project(camera);
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -42,7 +42,7 @@ export function initDebug(ctx) {
         hp: 1 + s.pieces.length,
         pieces: s.pieces,
       },
-      boss: null,
+      boss: s.boss || null,
       charge01: +s.charge01.toFixed(4),
       charging: !!s.charging,
       grounded: !!s.grounded,
@@ -54,7 +54,8 @@ export function initDebug(ctx) {
       anchor: s.anchor,
       frames: s.frames,
       lastDtMs: +(s.lastDt * 1000).toFixed(2),
-      screen: playerScreen(),
+      screen: bodyScreen(playerBody),
+      bossScreen: bossBody ? bodyScreen(bossBody) : null,
       seed,
     };
   }
@@ -90,6 +91,19 @@ export function initDebug(ctx) {
       return rng();
     },
   };
+
+  // Headless telemetry (dev-only): mirror progress into <title> so a
+  // `--dump-dom` run can read frames/phase/boss without JS eval.
+  if (params.has('debug')) {
+    setInterval(() => {
+      try {
+        const s = snapshot();
+        document.title = `f${s.frames} ${s.phase} boss:${s.boss ? `${s.boss.state}/hp${s.boss.hp}/fight${s.boss.fight ? 1 : 0}` : 'none'}`;
+      } catch {
+        /* ignore */
+      }
+    }, 500);
+  }
 
   // Minimal autoplay for the core: slow orbit, periodic full-ish flicks.
   if (params.has('autoplay')) {

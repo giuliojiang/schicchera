@@ -15,7 +15,9 @@ gates), terraced beach (layered shelves, switchback ramps, gentle/steep fork,
 sword cove, shore dressing, pier), navigable forest grove (thicket walls,
 4 clearings, winding paths, slalom shortcut, pond, lookout hill, giant tree,
 hammer grove, stream with bridge and stepping stones), collectible weapons
-that attach with mass + colliders, per-zone fog, synthesized audio,
+that attach with mass + colliders, bump-attacking ball boss with a
+momentum-rules fight (wind-up telegraphs, piece loss, win/lose icon screens,
+victory boss-ball attach), per-zone fog, synthesized audio,
 `?debug=1` state bridge. No build step.
 
 ## Run it
@@ -34,4 +36,6 @@ Open http://127.0.0.1:8765/ in a browser.
 
 Debug hooks: `?debug=1` exposes `window.__GAME__` (snapshot, `step()`,
 `setSeed()`); `?autoplay&seed=N` runs a scripted input loop;
-`?at=x,z[,y]&orbit=rad` overrides the spawn for level inspection.
+`?at=x,z[,y]&orbit=rad` overrides the spawn for level inspection;
+`?sim=N[&script=win|trade]` runs N fixed steps headlessly and reports the
+outcome in `<title>` (win = scripted victory, trade = scripted piece loss).

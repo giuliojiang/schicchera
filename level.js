@@ -45,6 +45,9 @@ import {
   BEACH_TUFTS_PER_SHELF,
   BENCHES,
   BOAT,
+  BOSS_ANCHOR,
+  BOSS_MASS,
+  BOSS_RADIUS,
   BRIDGE_CREST_H,
   BRIDGE_SPAN,
   BRIDGE_THICK,
@@ -56,6 +59,9 @@ import {
   CLOUDS,
   COL_ARCH,
   COL_ARENA_DISC,
+  COL_BOSS,
+  COL_BOSS_BAND,
+  COL_BOSS_EYE,
   COL_ARENA_GROUND,
   COL_ARENA_STRATA,
   COL_BEACH_GROUND,
@@ -1859,6 +1865,7 @@ export function buildPlayerMesh() {
   cube.castShadow = true;
   cube.receiveShadow = true;
   g.add(cube);
+  g.userData.bodyMat = cube.material; // damage flash target (spec section 11)
   const eyeMat = matte(COL_EYE, { roughness: 0.8 });
   for (const ex of [-0.2, 0.2]) {
     const eye = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.24, 0.06), eyeMat);
@@ -1979,13 +1986,86 @@ export function attachWeapon(THREE_NS, CANNON_NS, playerMesh, playerBody, id) {
   for (const m of group.children) {
     if (m.material && 'emissiveIntensity' in m.material) m.material.emissiveIntensity = 0.12;
   }
-  playerMesh.add(group);
   const [hx, hy, hz] = a.half;
-  playerBody.addShape(
-    new CANNON_NS.Box(new CANNON_NS.Vec3(hx, hy, hz)),
-    new CANNON_NS.Vec3(a.collider[0], a.collider[1], a.collider[2])
-  );
+  const shape = new CANNON_NS.Box(new CANNON_NS.Vec3(hx, hy, hz));
+  group.userData.weaponId = id;
+  group.userData.shape = shape;
+  playerMesh.add(group);
+  playerBody.addShape(shape, new CANNON_NS.Vec3(a.collider[0], a.collider[1], a.collider[2]));
   playerBody.mass += PIECE_MASS[id];
+  playerBody.updateMassProperties();
+  playerBody.aabbNeedsUpdate = true;
+  return playerBody.mass;
+}
+
+// Lose a piece to boss damage (spec section 10): destroyed, disappears.
+// Removes the last-attached group of that id, its collider, and its mass.
+export function detachWeapon(playerMesh, playerBody, id) {
+  const kids = playerMesh.children;
+  for (let i = kids.length - 1; i >= 0; i--) {
+    if (kids[i].userData && kids[i].userData.weaponId === id) {
+      const group = kids[i];
+      playerMesh.remove(group);
+      if (group.userData.shape) playerBody.removeShape(group.userData.shape);
+      playerBody.mass -= PIECE_MASS[id];
+      playerBody.updateMassProperties();
+      playerBody.aabbNeedsUpdate = true;
+      return playerBody.mass;
+    }
+  }
+  return playerBody.mass;
+}
+
+// Boss ball: pale bone sphere with an angry face and a dark equator band so
+// the roll reads. Lighter silhouette tracks against the dark rock (§4.4).
+export function buildBossMesh() {
+  const g = new THREE.Group();
+  const ball = new THREE.Mesh(
+    new THREE.SphereGeometry(BOSS_RADIUS, 18, 14),
+    matte(COL_BOSS, { roughness: 0.75 })
+  );
+  ball.castShadow = true;
+  ball.receiveShadow = true;
+  g.add(ball);
+  g.userData.bodyMat = ball.material; // damage flash target (spec section 11)
+  const band = new THREE.Mesh(
+    new THREE.TorusGeometry(BOSS_RADIUS * 1.0, 0.07, 8, 24),
+    matte(COL_BOSS_BAND, { roughness: 0.9 })
+  );
+  band.rotation.x = Math.PI / 2;
+  band.castShadow = true;
+  g.add(band);
+  // Angry face on +Z: whites, pupils, slanted brows.
+  const white = matte(0xf2e6c8, { roughness: 0.7 });
+  const dark = matte(COL_BOSS_EYE, { roughness: 0.8 });
+  const z = BOSS_RADIUS * 0.82;
+  for (const ex of [-0.32, 0.32]) {
+    const w = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.26, 0.1), white);
+    w.position.set(ex, 0.12, z);
+    g.add(w);
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.06), dark);
+    p.position.set(ex, 0.08, z + 0.06);
+    g.add(p);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.08), dark);
+    brow.position.set(ex, 0.42, z + 0.02);
+    brow.rotation.z = ex < 0 ? -0.45 : 0.45; // slant inward-down
+    g.add(brow);
+  }
+  return g;
+}
+
+// Victory (spec section 10): the boss ball itself attaches to the player.
+// Reparents the fought boss mesh onto the back anchor + matching collider.
+export function attachBossBall(CANNON_NS, playerMesh, playerBody, bossMesh) {
+  bossMesh.position.set(BOSS_ANCHOR.pos[0], BOSS_ANCHOR.pos[1], BOSS_ANCHOR.pos[2]);
+  bossMesh.rotation.set(0, 0, 0);
+  bossMesh.scale.set(1, 1, 1); // clear any wind-up squash
+  playerMesh.add(bossMesh); // reparent: three.js removes it from the scene
+  playerBody.addShape(
+    new CANNON_NS.Sphere(BOSS_RADIUS),
+    new CANNON_NS.Vec3(BOSS_ANCHOR.collider[0], BOSS_ANCHOR.collider[1], BOSS_ANCHOR.collider[2])
+  );
+  playerBody.mass += BOSS_MASS;
   playerBody.updateMassProperties();
   playerBody.aabbNeedsUpdate = true;
   return playerBody.mass;

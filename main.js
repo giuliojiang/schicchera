@@ -2,6 +2,17 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import {
+  ARENA_CENTER,
+  ARENA_RING_R,
+  BOSS_BUMP_SPEED,
+  BOSS_BUMP_TIME,
+  BOSS_HP,
+  BOSS_ROAM_RADIUS,
+  BOSS_ROAM_RATE,
+  BOSS_ROLL_SPEED,
+  BOSS_STEER_RATE,
+  BOSS_WINDUP_DAMP,
+  BUMP_INTERVAL,
   CAMERA_ANCHOR_RATE,
   CAMERA_DEADZONE,
   CAMERA_DISTANCE,
@@ -10,6 +21,9 @@ import {
   CAMERA_LOOKAHEAD_MAX,
   CAMERA_LOOKAHEAD_TIME,
   CAMERA_VEL_RATE,
+  COL_DAMAGE_FLASH,
+  COMBAT_COOLDOWN,
+  DAMAGE_FLASH_TIME,
   FOG_ARENA,
   FOG_BEACH,
   FOG_DENSITY,
@@ -20,6 +34,7 @@ import {
   FULL_CHARGE_TIME,
   LAUNCH_STRETCH_TIME,
   MAX_FRAME_DT,
+  MOMENTUM_TIE_EPS,
   ORBIT_SPEED,
   PICKUP_TOUCH_DIST,
   PICKUPS,
@@ -28,28 +43,53 @@ import {
   SQUASH_XZ,
   SQUASH_Y,
   SUN_OFFSET,
+  WINDUP_DURATION,
   ZONE_ARENA,
   ZONE_BEACH,
   ZONE_FOREST,
   ZONE_PASS,
   ZONE_VILLAGE,
 } from './constants.js';
-import { applyFlickVelocity, chargeFraction, clampSpeed, flickSpeed, zoneOf } from './game.js';
+import {
+  applyFlickVelocity,
+  bossNext,
+  chargeFraction,
+  clampSpeed,
+  flickSpeed,
+  momentum,
+  resolveCombat,
+  zoneOf,
+} from './game.js';
 import {
   applyDrag,
+  createBossBody,
   createPlayerBody,
   createStaticLevel,
   createStepper,
   createWorld,
   isGrounded,
 } from './physics.js';
-import { attachWeapon, buildLevel, buildLights, buildPickup, buildPlayerMesh } from './level.js';
+import {
+  attachBossBall,
+  attachWeapon,
+  buildBossMesh,
+  buildLevel,
+  buildLights,
+  buildPickup,
+  buildPlayerMesh,
+  detachWeapon,
+} from './level.js';
 import {
   ensureAudio,
+  playBossBump,
+  playDamage,
   playFlick,
   playPickup,
   playThud,
+  playVictory,
+  startBossWindup,
   startCharge,
+  stopBossWindup,
   stopCharge,
   updateCharge,
 } from './audio.js';
@@ -95,13 +135,23 @@ const camera = new THREE.PerspectiveCamera(
 // Physics.
 const world = createWorld();
 const playerBody = createPlayerBody(world);
+const bossBody = createBossBody(world);
 const { groundBodies } = createStaticLevel(world);
 const stepper = createStepper(world);
+const bossMesh = buildBossMesh();
+scene.add(bossMesh);
 
 playerBody.addEventListener('collide', (e) => {
   try {
     const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
     playThud(v);
+  } catch {
+    /* ignore */
+  }
+  // Boss touch: momentum decides who deals exactly 1 HP (spec section 10).
+  try {
+    const other = e.contact.bi === playerBody ? e.contact.bj : e.contact.bi;
+    if (other === bossBody) resolveBossTouch();
   } catch {
     /* ignore */
   }
@@ -114,11 +164,24 @@ let charging = false;
 let holdTime = 0;
 let stretchT = 0; // launch pop timer
 let grounded = false;
-let phase = 'playing'; // playing | won | lost (boss later)
+let phase = 'playing'; // playing | won | lost
 let frames = 0;
 let lastDt = 0;
 let zone = 'village';
 let animT = 0;
+
+// Boss fight state (spec sections 9-10).
+let fightClock = 0; // game-time clock for the combat cooldown
+let fightActive = false; // entering the ring starts the fight
+let bossState = 'dormant'; // dormant | roam | windup | bump
+let bossT = 0; // time in state
+let roamAngle = 0; // roam waypoint orbit position
+let bossHp = BOSS_HP;
+let bossAttached = false; // victory: the ball rides on the player
+let lastCombatT = -COMBAT_COOLDOWN;
+let playerFlashT = 0;
+let bossFlashT = 0;
+let bossStretchT = 0;
 
 // Dev-only spawn override for level inspection: ?at=x,z[,y]&orbit=rad.
 {
@@ -168,7 +231,7 @@ function flickDirection(out) {
 const dirTmp = [0, -1];
 
 function beginCharge() {
-  if (charging) return;
+  if (charging || phase !== 'playing') return;
   charging = true;
   holdTime = 0;
   stretchT = 0;
@@ -177,7 +240,10 @@ function beginCharge() {
 }
 
 function releaseFlick() {
-  if (!charging) return;
+  if (!charging || phase !== 'playing') {
+    charging = false;
+    return;
+  }
   charging = false;
   const speed = flickSpeed(holdTime, FULL_CHARGE_TIME, PLAYER_MAX_FLICK_SPEED);
   const frac = chargeFraction(holdTime, FULL_CHARGE_TIME);
@@ -193,7 +259,140 @@ function releaseFlick() {
   holdTime = 0;
 }
 
+// One touch resolves once: cooldown keeps a lingering contact from dealing
+// damage every physics step. Ties bounce free without consuming cooldown.
+// This runs inside a collide callback, i.e. mid-physics-step, so it only
+// records the outcome: bodies are added/removed after the step completes,
+// since mutating the world mid-step corrupts the solver.
+let pendingCombat = null; // 'player' | 'boss', applied in stepSim after the step
+
+function resolveBossTouch() {
+  if (phase !== 'playing' || !fightActive) return;
+  if (fightClock - lastCombatT < COMBAT_COOLDOWN) return;
+  const pv = playerBody.velocity;
+  const bv = bossBody.velocity;
+  const out = resolveCombat(
+    momentum(playerBody.mass, pv.x, pv.y, pv.z),
+    momentum(bossBody.mass, bv.x, bv.y, bv.z),
+    charging,
+    MOMENTUM_TIE_EPS
+  );
+  if (out === 'tie') return;
+  lastCombatT = fightClock;
+  pendingCombat = out;
+}
+
+function applyCombat(out) {
+  if (out === 'player') {
+    bossHp -= 1;
+    bossFlashT = DAMAGE_FLASH_TIME;
+    playDamage();
+    if (bossHp <= 0) winFight();
+  } else {
+    playerFlashT = DAMAGE_FLASH_TIME;
+    playDamage();
+    if (pieces.length > 0) {
+      detachWeapon(playerMesh, playerBody, pieces.pop()); // last attached, first lost
+    } else {
+      loseFight();
+    }
+  }
+}
+
+function dropCharge() {
+  charging = false;
+  holdTime = 0;
+  stopCharge();
+}
+
+function winFight() {
+  phase = 'won';
+  dropCharge();
+  stopBossWindup();
+  world.removeBody(bossBody);
+  attachBossBall(CANNON, playerMesh, playerBody, bossMesh);
+  bossAttached = true;
+  playVictory();
+  document.getElementById('victory').hidden = false;
+}
+
+function loseFight() {
+  phase = 'lost';
+  dropCharge();
+  stopBossWindup();
+  document.getElementById('gameover').hidden = false;
+}
+
+const BOSS_TIMINGS = { interval: BUMP_INTERVAL, windup: WINDUP_DURATION, bumpTime: BOSS_BUMP_TIME };
+
+function updateBoss(dt) {
+  if (phase !== 'playing') return;
+  if (!fightActive) {
+    // Entering the ring starts the fight (spec section 3).
+    const dx = playerBody.position.x - ARENA_CENTER[0];
+    const dz = playerBody.position.z - ARENA_CENTER[1];
+    if (dx * dx + dz * dz >= ARENA_RING_R * ARENA_RING_R) return;
+    fightActive = true;
+    bossState = 'roam';
+    bossT = 0;
+  }
+  bossT += dt;
+  const next = bossNext(bossState, bossT, BOSS_TIMINGS);
+  if (next !== bossState) {
+    if (next === 'windup') {
+      // Stop dead: the still window is the telegraph.
+      bossBody.velocity.x = 0;
+      bossBody.velocity.z = 0;
+      startBossWindup(WINDUP_DURATION);
+    } else if (next === 'bump') {
+      // Aim locks at fire time. A hit during wind-up never cancels this:
+      // the still window is risk/reward, not a free cancel.
+      const dx = playerBody.position.x - bossBody.position.x;
+      const dz = playerBody.position.z - bossBody.position.z;
+      const len = Math.hypot(dx, dz);
+      bossBody.velocity.x = (len > 1e-4 ? dx / len : 1) * BOSS_BUMP_SPEED;
+      bossBody.velocity.z = (len > 1e-4 ? dz / len : 0) * BOSS_BUMP_SPEED;
+      bossBody.wakeUp();
+      stopBossWindup();
+      playBossBump();
+      bossStretchT = LAUNCH_STRETCH_TIME;
+    }
+    bossState = next;
+    bossT = 0;
+  }
+  if (bossState === 'roam') {
+    // Chase a waypoint orbiting the center: roams the floor, never camps.
+    roamAngle += BOSS_ROAM_RATE * dt;
+    const tx = ARENA_CENTER[0] + Math.cos(roamAngle) * BOSS_ROAM_RADIUS;
+    const tz = ARENA_CENTER[1] + Math.sin(roamAngle) * BOSS_ROAM_RADIUS;
+    const dx = tx - bossBody.position.x;
+    const dz = tz - bossBody.position.z;
+    const len = Math.hypot(dx, dz);
+    let desX = 0;
+    let desZ = 0;
+    if (len > 1e-4) {
+      desX = (dx / len) * BOSS_ROLL_SPEED;
+      desZ = (dz / len) * BOSS_ROLL_SPEED;
+    }
+    const k = 1 - Math.exp(-BOSS_STEER_RATE * dt);
+    bossBody.velocity.x += (desX - bossBody.velocity.x) * k;
+    bossBody.velocity.z += (desZ - bossBody.velocity.z) * k;
+  } else if (bossState === 'windup') {
+    // Pin the still window (spec section 9).
+    const f = Math.exp(-BOSS_WINDUP_DAMP * dt);
+    bossBody.velocity.x *= f;
+    bossBody.velocity.z *= f;
+  }
+  // Bump is ballistic: low drag carries it at near full speed.
+}
+
 window.addEventListener('keydown', (e) => {
+  if (phase !== 'playing') {
+    // End screens: flick key retries (the icon button does the same).
+    if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) location.reload();
+    e.preventDefault();
+    return;
+  }
   if (e.code === 'KeyA' || e.code === 'ArrowLeft') {
     input.left = true;
     e.preventDefault();
@@ -302,6 +501,46 @@ function updateSquash(dt) {
   s.z += (1 - s.z) * Math.min(1, dt * 10);
 }
 
+function updateBossSquash(dt) {
+  if (bossAttached) return; // victory: the ball rides as-is
+  if (bossStretchT > 0) {
+    bossStretchT = Math.max(0, bossStretchT - dt);
+    const t = bossStretchT / LAUNCH_STRETCH_TIME; // 1 -> 0
+    const pop = Math.sin(t * Math.PI); // 0 up then down
+    bossMesh.scale.set(1 - 0.12 * pop, 1 + 0.22 * pop, 1 - 0.12 * pop);
+    return;
+  }
+  if (fightActive && bossState === 'windup') {
+    // Telegraph squash grows across the wind-up (spec section 9).
+    const f = Math.min(1, bossT / WINDUP_DURATION);
+    bossMesh.scale.set(1 + SQUASH_XZ * f, 1 - SQUASH_Y * f, 1 + SQUASH_XZ * f);
+    return;
+  }
+  const s = bossMesh.scale;
+  s.x += (1 - s.x) * Math.min(1, dt * 10);
+  s.y += (1 - s.y) * Math.min(1, dt * 10);
+  s.z += (1 - s.z) * Math.min(1, dt * 10);
+}
+
+function updateFlash(mesh, timer) {
+  const mat = mesh.userData.bodyMat;
+  if (timer > 0) {
+    mat.emissive.setHex(COL_DAMAGE_FLASH);
+    mat.emissiveIntensity = 1;
+  } else {
+    mat.emissive.setHex(0x000000);
+    mat.emissiveIntensity = 1;
+  }
+}
+
+function updateFlashes(dt) {
+  // The damaged party flashes red (spec section 11).
+  if (playerFlashT > 0) playerFlashT = Math.max(0, playerFlashT - dt);
+  if (bossFlashT > 0) bossFlashT = Math.max(0, bossFlashT - dt);
+  updateFlash(playerMesh, playerFlashT);
+  updateFlash(bossMesh, bossFlashT);
+}
+
 function updateWorld(dt) {
   animT += dt;
   const px = playerBody.position.x;
@@ -389,7 +628,7 @@ function updateWorld(dt) {
     const dx = px - p.group.position.x;
     const dy = py - p.group.position.y;
     const dz = pz - p.group.position.z;
-    if (dx * dx + dy * dy + dz * dz < PICKUP_TOUCH_DIST * PICKUP_TOUCH_DIST) {
+    if (phase === 'playing' && dx * dx + dy * dy + dz * dz < PICKUP_TOUCH_DIST * PICKUP_TOUCH_DIST) {
       p.taken = true;
       scene.remove(p.group);
       attachWeapon(THREE, CANNON, playerMesh, playerBody, p.id);
@@ -401,6 +640,50 @@ function updateWorld(dt) {
 
 let lastTime = performance.now();
 
+// One deterministic sim step: physics, boss AI, pickups, combat (via collide
+// events), mesh sync. The rAF loop calls this every frame; ?sim=N calls it N
+// times synchronously for headless end-to-end runs.
+function stepSim(dt) {
+  if (phase !== 'playing') return;
+  if (charging) holdTime += dt;
+  fightClock += dt;
+
+  stepper.step(dt);
+  if (pendingCombat !== null) {
+    const out = pendingCombat;
+    pendingCombat = null;
+    applyCombat(out);
+    if (phase !== 'playing') return; // won/lost mid-step: freeze immediately
+  }
+  grounded = isGrounded(world, playerBody, groundBodies);
+  applyDrag(playerBody, grounded, false);
+  applyDrag(bossBody, true, true);
+  updateBoss(dt);
+  updateWorld(dt);
+
+  // Sync visuals.
+  playerMesh.position.set(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+  playerMesh.quaternion.set(
+    playerBody.quaternion.x,
+    playerBody.quaternion.y,
+    playerBody.quaternion.z,
+    playerBody.quaternion.w
+  );
+  if (!bossAttached) {
+    bossMesh.position.set(bossBody.position.x, bossBody.position.y, bossBody.position.z);
+    bossMesh.quaternion.set(
+      bossBody.quaternion.x,
+      bossBody.quaternion.y,
+      bossBody.quaternion.z,
+      bossBody.quaternion.w
+    );
+  }
+
+  updateSquash(dt);
+  updateBossSquash(dt);
+  updateFlashes(dt);
+}
+
 function frame(now) {
   try {
     let dt = (now - lastTime) / 1000;
@@ -408,24 +691,16 @@ function frame(now) {
     if (!(dt >= 0) || dt > MAX_FRAME_DT) dt = Math.min(Math.max(dt, 0), MAX_FRAME_DT);
     lastDt = dt;
 
-    if (charging) holdTime += dt;
+    // End screens freeze the sim behind the overlay (spec section 11).
+    if (phase !== 'playing') {
+      renderer.render(scene, camera);
+      frames++;
+      return;
+    }
 
-    stepper.step(dt);
-    grounded = isGrounded(world, playerBody, groundBodies);
-    applyDrag(playerBody, grounded, false);
-    updateWorld(dt);
-
-    // Sync visual.
-    playerMesh.position.set(playerBody.position.x, playerBody.position.y, playerBody.position.z);
-    playerMesh.quaternion.set(
-      playerBody.quaternion.x,
-      playerBody.quaternion.y,
-      playerBody.quaternion.z,
-      playerBody.quaternion.w
-    );
+    stepSim(dt);
 
     updateCamera(frames === 0 ? 1 : dt);
-    updateSquash(dt);
 
     renderer.render(scene, camera);
     frames++;
@@ -440,6 +715,9 @@ function frame(now) {
 
 // Place camera instantly on boot so first frame is framed.
 playerMesh.position.set(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+bossMesh.position.set(bossBody.position.x, bossBody.position.y, bossBody.position.z);
+document.getElementById('retryBtn').addEventListener('click', () => location.reload());
+document.getElementById('replayBtn').addEventListener('click', () => location.reload());
 updateCamera(1);
 renderer.render(scene, camera);
 requestAnimationFrame((t) => {
@@ -459,6 +737,7 @@ if (params.has('debug') || params.has('autoplay')) {
         camera,
         world,
         playerBody,
+        bossBody,
         input,
         getState: () => ({
           charging,
@@ -474,10 +753,59 @@ if (params.has('debug') || params.has('autoplay')) {
           zone,
           pieces: [...pieces],
           pickups: pickups.map((p) => ({ id: p.id, taken: p.taken })),
+          boss: {
+            pos: [
+              +bossBody.position.x.toFixed(4),
+              +bossBody.position.y.toFixed(4),
+              +bossBody.position.z.toFixed(4),
+            ],
+            vel: [
+              +bossBody.velocity.x.toFixed(4),
+              +bossBody.velocity.y.toFixed(4),
+              +bossBody.velocity.z.toFixed(4),
+            ],
+            hp: bossHp,
+            state: bossState,
+            fight: fightActive,
+          },
         }),
         actions: { beginCharge, releaseFlick },
         params,
       })
     )
     .catch(() => {});
+}
+
+// Headless end-to-end: ?sim=N runs N fixed 1/60 steps synchronously, then
+// reports the outcome in <title> for --dump-dom runs. No rAF needed.
+// Dev-only scripts: &script=win keeps hurling the cube into the boss at max
+// flick speed (naked max always wins); &script=trade arms the cube and parks
+// it still so the boss collects pieces off it.
+{
+  const simN = parseInt(params.get('sim') || '0', 10);
+  if (Number.isFinite(simN) && simN > 0) {
+    const script = params.get('script') || '';
+    if (script === 'trade') {
+      for (const id of ['dagger', 'sword', 'hammer']) {
+        attachWeapon(THREE, CANNON, playerMesh, playerBody, id);
+        pieces.push(id);
+      }
+      playerBody.velocity.set(0, 0, 0);
+    }
+    for (let i = 0; i < simN; i++) {
+      if (script === 'win' && i > 0 && i % 10 === 0 && phase === 'playing') {
+        playerBody.position.set(bossBody.position.x - 2, 1, bossBody.position.z);
+        playerBody.velocity.set(PLAYER_MAX_FLICK_SPEED, 0, 0);
+        playerBody.angularVelocity.set(0, 0, 0);
+      }
+      stepSim(1 / 60);
+    }
+    updateCamera(1);
+    renderer.render(scene, camera);
+    document.title =
+      `sim${simN} ${phase} boss:${bossState}/hp${bossHp}/fight${fightActive ? 1 : 0}` +
+      ` pieces:${pieces.join(',') || '-'} mass:${playerBody.mass.toFixed(2)}` +
+      ` ppos:${playerBody.position.x.toFixed(1)},${playerBody.position.z.toFixed(1)}` +
+      ` bpos:${bossBody.position.x.toFixed(1)},${bossBody.position.z.toFixed(1)}`;
+  }
 }

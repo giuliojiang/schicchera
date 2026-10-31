@@ -22,7 +22,11 @@ import {
   BEACH_STONES,
   BENCHES,
   BOAT,
+  BOSS_ANGULAR_DAMPING,
   BOSS_GROUND_DRAG,
+  BOSS_MASS,
+  BOSS_RADIUS,
+  BOSS_SPAWN_Y,
   BRIDGE_CREST_H,
   BRIDGE_SPAN,
   BRIDGE_THICK,
@@ -91,6 +95,20 @@ export function createPlayerBody(world) {
     angularDamping: PLAYER_ANGULAR_DAMPING,
   });
   // Compound-ready: weapons will append shapes/offsets here later.
+  world.addBody(body);
+  return body;
+}
+
+// Boss ball: a sphere at the arena center, dormant until the player enters.
+// Efficient roller: low linear + angular damping (spec sections 7, 9).
+export function createBossBody(world) {
+  const body = new CANNON.Body({
+    mass: BOSS_MASS,
+    shape: new CANNON.Sphere(BOSS_RADIUS),
+    position: new CANNON.Vec3(ARENA_CENTER[0], BOSS_SPAWN_Y, ARENA_CENTER[1]),
+    linearDamping: BOSS_GROUND_DRAG,
+    angularDamping: BOSS_ANGULAR_DAMPING,
+  });
   world.addBody(body);
   return body;
 }

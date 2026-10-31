@@ -124,6 +124,137 @@ export function playPickup(count) {
   }
 }
 
+// Boss wind-up: rising telegraph tone across the wind-up duration.
+let bossOsc = null;
+let bossGain = null;
+
+export function startBossWindup(dur) {
+  const ac = ensureAudio();
+  if (!ac) return;
+  stopBossWindup(0.01);
+  try {
+    bossOsc = ac.createOscillator();
+    bossGain = ac.createGain();
+    bossOsc.type = 'sawtooth';
+    const t = ac.currentTime;
+    const d = Math.max(0.1, dur);
+    bossOsc.frequency.setValueAtTime(120, t);
+    bossOsc.frequency.linearRampToValueAtTime(520, t + d);
+    bossGain.gain.setValueAtTime(0.0001, t);
+    bossGain.gain.exponentialRampToValueAtTime(0.08, t + 0.08);
+    bossOsc.connect(bossGain).connect(ac.destination);
+    bossOsc.start(t);
+  } catch {
+    bossOsc = null;
+    bossGain = null;
+  }
+}
+
+export function stopBossWindup(release = 0.05) {
+  if (!ctx || !bossOsc || !bossGain) {
+    bossOsc = null;
+    bossGain = null;
+    return;
+  }
+  try {
+    const t = ctx.currentTime;
+    bossGain.gain.cancelScheduledValues(t);
+    bossGain.gain.setTargetAtTime(0.0001, t, release / 3);
+    const osc = bossOsc;
+    setTimeout(() => {
+      try {
+        osc.stop();
+      } catch {
+        /* ignore */
+      }
+    }, release * 1000 + 80);
+  } catch {
+    /* ignore */
+  }
+  bossOsc = null;
+  bossGain = null;
+}
+
+// Boss bump: heavy thud + downward whoosh.
+export function playBossBump() {
+  const ac = ensureAudio();
+  if (!ac) return;
+  try {
+    const t = ac.currentTime;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.25);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + 0.4);
+    const w = ac.createOscillator();
+    const wg = ac.createGain();
+    w.type = 'triangle';
+    w.frequency.setValueAtTime(420, t);
+    w.frequency.exponentialRampToValueAtTime(110, t + 0.22);
+    wg.gain.setValueAtTime(0.0001, t);
+    wg.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+    wg.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    w.connect(wg).connect(ac.destination);
+    w.start(t);
+    w.stop(t + 0.3);
+  } catch {
+    /* ignore */
+  }
+}
+
+// Damage: dull hit for either party taking 1 HP.
+export function playDamage() {
+  const ac = ensureAudio();
+  if (!ac) return;
+  try {
+    const t = ac.currentTime;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(200, t);
+    osc.frequency.exponentialRampToValueAtTime(75, t + 0.18);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.2, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(t);
+    osc.stop(t + 0.3);
+  } catch {
+    /* ignore */
+  }
+}
+
+// Victory: short ascending arpeggio.
+export function playVictory() {
+  const ac = ensureAudio();
+  if (!ac) return;
+  try {
+    const t = ac.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((f, i) => {
+      const at = t + i * 0.12;
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, at);
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.22, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.35);
+      osc.connect(gain).connect(ac.destination);
+      osc.start(at);
+      osc.stop(at + 0.4);
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 // Collision thud, volume scaled by impact velocity.
 export function playThud(impact) {
   const ac = ctx || ensureAudio();

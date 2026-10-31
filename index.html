@@ -18,6 +18,33 @@
 </head>
 <body>
 <div id="app"></div>
+<div id="gameover" class="overlay" hidden>
+  <div class="panel">
+    <svg viewBox="0 0 64 64" width="120" height="120" aria-hidden="true">
+      <rect x="10" y="10" width="44" height="44" rx="8" fill="none" stroke="#e8e2d2" stroke-width="5"/>
+      <polyline points="34,10 26,26 36,34 28,54" fill="none" stroke="#ff5a3c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <button id="retryBtn" class="icon-btn" aria-label="retry">
+      <svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true">
+        <polyline points="23 4 23 10 17 10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+</div>
+<div id="victory" class="overlay victory" hidden>
+  <div class="panel">
+    <svg viewBox="0 0 64 64" width="120" height="120" aria-hidden="true">
+      <polygon points="32,6 39,24 58,24 43,35 48,54 32,42 16,54 21,35 6,24 25,24" fill="#ffd97a" stroke="#8a6a2a" stroke-width="2" stroke-linejoin="round"/>
+    </svg>
+    <button id="replayBtn" class="icon-btn" aria-label="replay">
+      <svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true">
+        <polyline points="23 4 23 10 17 10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+</div>
 <script type="module" src="./main.js"></script>
 </body>
 </html>

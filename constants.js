@@ -21,6 +21,16 @@ export const BOSS_ROLL_SPEED = 5; // u/s mid of 2-3 range x2.0 (issue #3 fix 2; 
 export const BOSS_HP = 3;
 export const BUMP_INTERVAL = 4; // s fixed rhythm
 export const WINDUP_DURATION = 1; // s, must be < arena-crossing time
+export const BOSS_RADIUS = 0.9;
+export const BOSS_BUMP_TIME = 1; // s, bump state duration before roaming again
+export const BOSS_ROAM_RADIUS = 6; // roam waypoints orbit the arena center at this radius
+export const BOSS_ROAM_RATE = 0.6; // rad/s waypoint orbit speed
+export const BOSS_STEER_RATE = 3; // 1/s roam velocity easing toward desired
+export const BOSS_WINDUP_DAMP = 8; // 1/s horizontal velocity decay while winding up
+export const BOSS_ANGULAR_DAMPING = 0.1; // efficient roller
+export const BOSS_SPAWN_Y = 2;
+export const COMBAT_COOLDOWN = 1; // s between damage resolutions (one touch = 1 HP max)
+export const MOMENTUM_TIE_EPS = 0.1; // |Δp| at/below this = tie, bounce, no damage
 
 export const CAMERA_DISTANCE = 8;
 export const CAMERA_HEIGHT = 5;
@@ -498,6 +508,9 @@ export const ANCHOR = {
   sword: { pos: [-0.78, 0, 0], collider: [-0.9, 0, 0], half: [0.65, 0.15, 0.08] },
   hammer: { pos: [0, 0.72, 0], collider: [0, 0.72, 0], half: [0.2, 0.5, 0.2] },
 };
+// Victory anchor: the boss ball rides on the back (-Z, opposite the face).
+// Raised so its bottom sits ~flush with the cube's bottom.
+export const BOSS_ANCHOR = { pos: [0, 0.35, -1.0], collider: [0, 0.35, -1.0] };
 
 // Fog per zone (color-as-map). Density shared; colors lerp on crossing.
 export const FOG_DENSITY = 0.012;
@@ -846,3 +859,8 @@ export const COL_ARENA_DISC = 0x38323e; // lightened fighting floor
 export const COL_ARENA_STRATA = 0x5d5866; // geological band on tall piles
 export const COL_EMBER = 0xff7a2a;
 export const COL_SMOKE = 0x4a4a4a;
+// Boss ball: pale bone so it tracks against the dark rock (issue #2 §4.4).
+export const COL_BOSS = 0xd8cfc0;
+export const COL_BOSS_BAND = 0x2b2630;
+export const COL_BOSS_EYE = 0x1c1a18;
+export const COL_DAMAGE_FLASH = 0xff2222;

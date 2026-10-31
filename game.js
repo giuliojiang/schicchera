@@ -1,6 +1,6 @@
 // Pure rules logic: no Three.js, no DOM, no audio imports.
-// Movement core lives here. Combat/momentum resolution will join later
-// with the boss, in this same file, still dependency-free.
+// Movement core, combat/momentum resolution, and the boss behavior cycle
+// all live here, still dependency-free (spec section 14.8).
 
 // Quadratic charge fraction in [0,1]. Same function drives speed,
 // squash, and charge tone (spec section 6).
@@ -75,6 +75,33 @@ export function arenaRingLayout({ cx, cz, radius, segments, gapHalfWidth, segOve
   const m = Math.floor(gapHalfAngle / step);
   const gapEdges = [(k - m - 0.5) * step, (k + m + 0.5) * step];
   return { kept, gapEdges, gapHalfAngle, segLen };
+}
+
+// Momentum magnitude p = m * |v| (spec section 10). Speed is the body's own
+// full 3D speed, not relative velocity.
+export function momentum(mass, vx, vy, vz) {
+  return mass * Math.hypot(vx, vy, vz);
+}
+
+// Who deals exactly 1 HP on a player-boss touch (spec section 10).
+// Returns 'player' | 'boss' | 'tie'. Charging is an explicit override:
+// caught mid-charge, the player takes the hit regardless of momenta.
+// tieEps turns "exactly equal" into something floats can reach: resting
+// contact jitter must tie, while any deliberate tap still wins.
+export function resolveCombat(playerP, bossP, charging, tieEps) {
+  if (charging) return 'boss';
+  if (Math.abs(playerP - bossP) <= tieEps) return 'tie';
+  return playerP > bossP ? 'player' : 'boss';
+}
+
+// Boss behavior cycle (spec section 9): roam -> windup -> bump -> roam.
+// Pure transition: returns the state for time-in-state t. 'dormant' never
+// advances here; entering the arena flips it to 'roam' (spec section 3).
+export function bossNext(state, t, { interval, windup, bumpTime }) {
+  if (state === 'roam' && t >= interval) return 'windup';
+  if (state === 'windup' && t >= windup) return 'bump';
+  if (state === 'bump' && t >= bumpTime) return 'roam';
+  return state;
 }
 
 // Seeded RNG (mulberry32) for any future gameplay randomness.
