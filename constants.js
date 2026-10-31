@@ -97,33 +97,88 @@ export const WALLS = [
 
 // Hills: buried spheres the player rolls over. [cx, cy, cz, radius]
 // Beach dunes sit on the lowered beach (base y -6); crests stay ~1.5 above it.
+// Forest (issue #8): 4 rolling hills, all clear of the winding paths, pond,
+// stream, and grove. The lookout (-8,-47, crest 3) sees the giant tree.
 export const HILLS = [
   [-50, -11.5, -13, 7], // beach north dune (crest y -4.5)
   [-51.5, -10.5, 18.5, 6], // beach south dune (crest y -4.5)
-  [8, -7.5, -38, 9], // forest east (crest y 1.5)
-  [-8, -8, -48, 10], // forest west (crest y 2)
+  [15, -5.2, -32, 7], // forest east (crest y 1.8)
+  [-8, -3, -47, 6], // forest lookout (crest y 3)
+  [-15, -6, -30, 8], // forest west (crest y 2)
+  [8, -6.5, -55, 8], // forest north (crest y 1.5)
 ];
 
-// Trees: [x, z, trunkH, canopyR, canopyKind, greenIdx]. Forest zone only.
+// Trees: [x, z, trunkH, canopyR, canopyKind, greenIdx].
+// Forest (issue #8): 53 trees in 6 thicket walls + entrance scatter + slalom
+// posts. Walls use exact 1.3-1.4 spacing (impassable); gaps are 2.8+ (doors).
+// Path-side trees are tall (3.5+) with small canopies so the camera looks
+// under them; thicket interiors stay low and dense. Validated: every trunk is
+// 2+ from path centerlines (except slalom/door exceptions) and no two trunks
+// trap (pairwise gaps either impassable or open, midpoint-checked).
 export const TREES = [
-  [-15, -23, 2.6, 1.8, 'cone', 0],
-  [-9, -24, 2.2, 1.5, 'blob', 1],
-  [9, -24, 2.4, 1.7, 'cone', 2],
-  [15, -23, 2.8, 1.9, 'blob', 3],
-  [4.5, -26, 2.3, 1.5, 'cone', 1],
-  [-4.5, -27, 2.5, 1.6, 'blob', 0],
-  [6, -30, 2.6, 1.8, 'cone', 3],
-  [-10, -30, 2.2, 1.4, 'blob', 2],
-  [12, -33, 2.7, 1.9, 'blob', 0],
-  [-13, -34, 2.4, 1.6, 'cone', 1],
-  [5, -37, 2.5, 1.7, 'cone', 2],
-  [-5, -42, 2.3, 1.5, 'blob', 3],
-  [14, -43, 2.8, 2.0, 'cone', 0],
-  [-14, -46, 2.6, 1.8, 'blob', 1],
-  [10, -47, 2.4, 1.6, 'cone', 3],
-  [6, -53, 2.5, 1.7, 'blob', 2],
-  [-16, -53, 2.7, 1.9, 'cone', 1],
-  [-4, -57, 2.4, 1.6, 'blob', 0],
+  // Thicket SW (7): west wall of the entrance/pond path, nook gap mid-line.
+  [-8.5, -27, 2.38, 1.85, 'cone', 0],
+  [-8.5, -28.4, 2.69, 1.62, 'blob', 1],
+  [-8.5, -31.2, 2.51, 1.54, 'cone', 2],
+  [-8.5, -32.6, 2.3, 1.98, 'blob', 3],
+  [-8.5, -34, 2.28, 1.52, 'cone', 0],
+  [-7.1, -34, 2.65, 1.89, 'blob', 1],
+  [-5.7, -34, 2.42, 1.75, 'cone', 2],
+  // Thicket SE (7): east wall, nook gap mid-line.
+  [11.5, -28, 2.27, 1.93, 'blob', 3],
+  [11.5, -29.4, 2.74, 1.76, 'cone', 0],
+  [11.5, -30.8, 2.59, 1.65, 'blob', 1],
+  [11.5, -33.6, 2.39, 2, 'cone', 2],
+  [11.5, -35, 2.23, 1.72, 'blob', 3],
+  [12.8, -28, 2.35, 1.93, 'cone', 0],
+  [14.2, -28, 2.52, 1.59, 'blob', 1],
+  // Thicket CW (6): west wall of the winding corridor, pocket gap mid-line.
+  [-6, -39.5, 2.26, 2, 'cone', 2],
+  [-6, -40.9, 2.21, 1.98, 'blob', 3],
+  [-6, -42.3, 2.44, 1.72, 'cone', 0],
+  [-6, -45.1, 2.38, 1.85, 'blob', 1],
+  [-6, -46.5, 2.42, 1.63, 'cone', 2],
+  [-6, -47.9, 2.7, 1.79, 'blob', 3],
+  // Thicket C2 divider (4): between winding and shortcut corridors.
+  [2.3, -41.5, 3.66, 1.32, 'cone', 0],
+  [2.3, -42.67, 3.67, 1.48, 'blob', 1],
+  [2.3, -43.83, 3.64, 1.44, 'cone', 2],
+  [2.3, -45, 3.87, 1.4, 'blob', 3],
+  // Thicket C2 east (6): east wall of the shortcut corridor.
+  [7, -40, 3.68, 1.35, 'cone', 0],
+  [7, -41.4, 3.55, 1.44, 'blob', 1],
+  [7, -42.8, 3.52, 1.42, 'cone', 2],
+  [7, -44.2, 3.56, 1.34, 'blob', 3],
+  [7, -45.6, 3.88, 1.32, 'cone', 0],
+  [7, -47, 3.81, 1.35, 'blob', 1],
+  // Thicket NE (7): north-east wall above the rejoin.
+  [5, -53, 2.36, 1.55, 'cone', 2],
+  [6.4, -53, 2.51, 1.55, 'blob', 3],
+  [7.8, -53, 2.24, 1.74, 'cone', 0],
+  [9.2, -53, 2.46, 1.81, 'blob', 1],
+  [10.6, -53, 2.62, 1.77, 'cone', 2],
+  [5, -54.4, 2.38, 1.92, 'blob', 3],
+  [5, -55.8, 2.6, 1.6, 'cone', 0],
+  // Grove ring (10): radius 5.5 around the giant tree, door east (slot 0).
+  // First and last are the taller door flankers.
+  [-7.77, -52.3, 3.6, 1.4, 'blob', 1],
+  [-9.77, -49.55, 2.32, 1.82, 'cone', 2],
+  [-13, -48.5, 2.51, 1.89, 'blob', 3],
+  [-16.23, -49.55, 2.33, 1.65, 'cone', 0],
+  [-18.23, -52.3, 2.77, 1.63, 'blob', 1],
+  [-18.23, -55.7, 2.74, 1.58, 'cone', 2],
+  [-16.23, -58.45, 2.33, 1.53, 'blob', 3],
+  [-13, -59.5, 2.48, 1.62, 'cone', 0],
+  [-9.77, -58.45, 2.37, 1.93, 'blob', 1],
+  [-7.77, -55.7, 3.6, 1.4, 'cone', 2],
+  // Entrance scatter (3).
+  [-4.2, -23.5, 2.2, 1.51, 'blob', 3],
+  [4.3, -24.5, 2.55, 1.77, 'cone', 0],
+  [-3.5, -27.5, 2.63, 1.94, 'blob', 1],
+  // Slalom posts (3): weave inside the shortcut corridor, alternating sides.
+  [3.4, -42.33, 3.7, 1.4, 'cone', 2],
+  [5.9, -44.2, 3.7, 1.4, 'blob', 3],
+  [3.1, -46, 3.7, 1.4, 'cone', 0],
   // Village shade trees (off roads, plaza, spurs, and sightlines).
   [-17.5, 4, 2.6, 1.6, 'blob', 1],
   [-4, 16, 2.2, 1.4, 'cone', 2],
@@ -247,6 +302,8 @@ export const SIGNS = [
   [-17, 2.8, 1.57, 'fish'],
   [2.8, -17, -0.1, 'boat'],
   [-22, 4.5, 1.57, 'sword'], // beach gate: the sword is that way
+  [2.5, -21.5, 0, 'hammer'], // forest gate: the hammer is that way (north)
+  [2.0, -37, -1.2, 'hammer'], // forest fork: hammer along the winding path
 ];
 // Big bushes with colliders: [x, z, r].
 export const BUSH_BIG = [
@@ -515,3 +572,201 @@ export const COL_FOAM = 0xf5f2e8;
 export const COL_SAND_PALE = 0xe0cfa5;
 export const COL_SAND_DARK = 0xc4b183;
 export const COL_SHELL = [0xe8e2d2, 0xd9b8b8, 0xb9b9b9];
+// Forest palette (issue #8): moss, leaf litter, mushrooms (muted cream/tan,
+// never saturated red), ferns, stump tops, shafts, fireflies.
+export const COL_MOSS = 0x4a5a35;
+export const COL_LEAF_LITTER = 0x7a6a45;
+export const COL_MUSHROOM_STEM = 0xd8cfb8;
+export const COL_MUSHROOM_CAP = 0xb8a080;
+export const COL_FERN = 0x4f7a3f;
+export const COL_STUMP_TOP = 0xa89060;
+export const COL_SHAFT_FOREST = 0xd8e8c0;
+export const COL_SHAFT_ARENA = 0xff6a4a;
+export const COL_FIREFLY = 0xb8c86a;
+
+// Forest zone layout (issue #8): a grove you navigate. Thickets are walls,
+// clearings are rooms, paths wind and fork. All validated for path clearance
+// (2+ from centerlines) and no-trap gaps (see the layout generator notes).
+//
+// Giant old tree: [x, z, trunkH, trunkR, canopyR]. The beacon; canopy darkest
+// green (COL_CANOPY[2]), pokes above every other canopy.
+export const GIANT_TREE = [-13, -54, 6, 0.8, 4];
+// Pond clearing: [x, z, r]. Visual-only disc, no water physics.
+export const FOREST_POND = [7, -35, 2];
+// Winding dirt paths: [cx, cz, sx, sz, rotY] overlapping strips, ~3 wide.
+// Main gate->pond->fork->lookout->grove, slalom shortcut, and spur patches.
+export const FOREST_PATHS = [
+  // Main: gate through the entrance clearing toward the pond.
+  [0, -22, 3, 5, 0],
+  [0.5, -26, 3, 4.5, 0.12],
+  [2, -29.5, 3, 4.5, 0.35], // dip logs sit across this strip
+  [4, -32.5, 3, 4, 0.25],
+  [4, -35.5, 3, 4, 0], // pond west edge
+  [3.5, -38, 4, 3, 0], // fork pad: winding west, shortcut east
+  // Winding branch: fork -> log bridge -> lookout -> grove door.
+  [2, -38.8, 3, 2.5, 0.3],
+  [-1, -42.2, 3, 3.5, 0.15],
+  [-2, -44.5, 3.5, 4, 0],
+  [-2, -48, 3, 3.5, 0.1],
+  [-4.5, -51, 3, 4, 0.6],
+  [-9.25, -53.5, 3, 4, -1.29], // grove door -> pedestal
+  // Slalom shortcut: fork -> stepping stones -> weave -> rejoin.
+  [5, -39.5, 3, 2.5, 0],
+  [4.8, -42.5, 3, 3.5, -0.15],
+  [4.5, -45.5, 3, 4, 0],
+  [2.5, -48, 3, 4, 0.8], // rejoin curve
+  // Spurs: pond edge and lookout base.
+  [4.75, -35, 2, 1.5, 1.57],
+  [-3.5, -46.25, 2, 3.5, -1.74],
+];
+// Stream: [x0, x1, z0, z1] water strip west-east, visual-only.
+export const FOREST_STREAM = [-20, 20, -41.25, -39.75];
+// Log bridge: [x, z, rotY] deck over the stream on the winding path.
+export const FOREST_BRIDGE = [0, -40.5, -2.63];
+// Stepping stones: [x, z] across the stream on the shortcut.
+export const FOREST_STONES = [
+  [5, -39.8],
+  [5.3, -40.5],
+  [4.7, -41.2],
+];
+// Stone circle: [x, z, size] ring around the giant tree (gap faces the
+// pedestal). Size >= 0.7 blocks like a rock; smaller is visual-only.
+export const FOREST_STONE_CIRCLE = [
+  [-11.75, -51.84, 0.5],
+  [-13.59, -51.57, 0.8],
+  [-15.1, -52.64, 0.5],
+  [-15.46, -54.47, 0.8],
+  [-14.45, -56.04, 0.5],
+  [-12.66, -56.48, 0.8],
+  [-11.06, -55.57, 0.5],
+];
+// Big bushes: [x, z, r] squashed icosahedrons that block (box approx).
+// First 9 form the grove ring wall with the ring trees (door east).
+export const FOREST_BUSH_BIG = [
+  [-8.55, -50.77, 0.9],
+  [-11.3, -48.77, 0.9],
+  [-14.7, -48.77, 0.9],
+  [-17.45, -50.77, 0.9],
+  [-18.5, -54, 0.9],
+  [-17.45, -57.23, 0.9],
+  [-14.7, -59.23, 0.9],
+  [-11.3, -59.23, 0.9],
+  [-8.55, -57.23, 0.9],
+  [0.72, -44.99, 0.9],
+  [-13.88, -23.9, 0.9],
+  [-14.36, -22.68, 0.9],
+  [12.5, -57.98, 0.9],
+  [17.94, -34.06, 0.9],
+];
+// Small bushes: [x, z, r] visual-only.
+export const FOREST_BUSH_SMALL = [
+  [14.53, -30.49, 0.5],
+  [0.62, -52.06, 0.5],
+  [4.87, -30.16, 0.41],
+  [-6.63, -44.54, 0.51],
+  [10.73, -39.68, 0.4],
+  [-4.61, -36.23, 0.47],
+  [16.16, -24.6, 0.52],
+  [2.08, -23.75, 0.43],
+  [-14.43, -35.36, 0.5],
+  [-16.35, -37.2, 0.46],
+  [-9.19, -42.48, 0.44],
+  [2.03, -42.63, 0.43],
+];
+// Ferns: [x, z] visual-only tufts near trunks and the pond.
+export const FOREST_FERNS = [
+  [1.59, -37.79],
+  [7.58, -52.11],
+  [2.77, -22.86],
+  [13.08, -31.98],
+  [8.03, -43.43],
+  [4.08, -40.88],
+  [11.41, -26.46],
+  [10.97, -38.7],
+  [2.42, -35.62],
+  [13.38, -37.12],
+  [7.09, -45.48],
+  [8.16, -37.88],
+  [10.85, -37.8],
+  [6.42, -28.98],
+  [6.53, -31.49],
+  [7.15, -29.67],
+  [7.18, -41.96],
+  [6.05, -40.7],
+  [16.44, -28.3],
+  [13.53, -26.12],
+];
+// Mushroom clusters: [x, z] visual-only, muted caps.
+export const FOREST_MUSHROOMS = [
+  [12.71, -37.56],
+  [10.78, -36.37],
+  [8.95, -40.9],
+  [8.77, -39.45],
+  [10.76, -38.03],
+  [10.32, -29.71],
+  [-8.37, -35.62],
+  [-4.86, -33.39],
+  [-7.72, -41.27],
+  [-6.6, -32.67],
+  [7.56, -45.18],
+  [-4.18, -34.15],
+];
+// Fallen logs: [x, z, rotY, len, twoSeg, r]. First two lie across the main
+// path as LOW roll-over bumps (the dip); the rest are seats beside paths.
+export const FOREST_LOGS = [
+  [2.0, -28.5, -0.59, 3.0, false, 0.25],
+  [3.8, -31.0, -0.59, 3.0, false, 0.25],
+  [9.5, -34.0, -1.95, 2.0, false, 0.3],
+  [-5.0, -47.0, 0, 2.0, true, 0.3],
+];
+// Stumps: [x, z] near clearings, low roll-over colliders.
+export const FOREST_STUMPS = [
+  [2.5, -22.5],
+  [-2, -33],
+  [9.5, -37.5],
+  [-4.5, -45.5],
+];
+// Mossy rocks: [x, z, size] grey rocks with moss caps, block like beach rocks.
+// First four mark the grove approach and the fork.
+export const FOREST_MOSSY_ROCKS = [
+  [-3.5, -53.5, 0.9],
+  [-6.5, -56, 0.9],
+  [1, -36.5, 0.8],
+  [7, -37, 0.8],
+  [-9.91, -29.26, 0.99],
+  [-6.66, -25.73, 0.89],
+  [10.85, -27.34, 0.86],
+  [13.5, -30, 0.87],
+  [16.68, -43.77, 0.94],
+  [12.33, -53.37, 0.9],
+];
+// Ground patches: [x, z, r, tone] moss/leaf-litter/dirt, visual-only.
+// Last is the dip hollow between the two path logs.
+export const FOREST_PATCHES = [
+  [-7.78, -43.22, 1.01, 'moss'],
+  [10.92, -48.86, 1.69, 'moss'],
+  [9.7, -44.35, 1.74, 'moss'],
+  [3.9, -52.8, 1.51, 'moss'],
+  [2.47, -42.34, 1.24, 'leaf'],
+  [0.98, -36.33, 1.1, 'leaf'],
+  [-14.75, -34.04, 1.22, 'leaf'],
+  [-12.65, -28.42, 1.58, 'dirt'],
+  [9.42, -50.46, 1.34, 'dirt'],
+  [6.71, -51.18, 1.05, 'dirt'],
+  [2.9, -29.75, 1.5, 'dirt'],
+];
+// Trunk moss: indices into TREES (forest entries) with mossy sides.
+export const FOREST_TRUNK_MOSS = [4, 43, 18, 16, 13, 44, 1, 2];
+// Light shafts: [x, z] over clearings and path gaps (forest only; the arena
+// keeps its two red shafts in level.js).
+export const FOREST_SHAFTS = [
+  [0, -24],
+  [7, -35],
+  [4, -38],
+  [-1, -42],
+  [5, -43],
+  [-8, -47],
+  [-11, -53],
+];
+export const FOREST_SHAFT_OPACITY = 0.1;
+export const FIREFLY_COUNT = 60;

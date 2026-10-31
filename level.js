@@ -43,6 +43,8 @@ import {
   COL_DOOR,
   COL_DRIFTWOOD,
   COL_EYE,
+  COL_FERN,
+  COL_FIREFLY,
   COL_FLOWER,
   COL_FOAM,
   COL_FOREST_GROUND,
@@ -53,6 +55,10 @@ import {
   COL_HUT_BODY,
   COL_HUT_ROOF,
   COL_LAVA,
+  COL_LEAF_LITTER,
+  COL_MOSS,
+  COL_MUSHROOM_CAP,
+  COL_MUSHROOM_STEM,
   COL_NET,
   COL_PASS_GROUND,
   COL_PATCH_GRASS,
@@ -64,6 +70,8 @@ import {
   COL_ROAD,
   COL_ROAD_WEAR,
   COL_ROCK,
+  COL_SHAFT_ARENA,
+  COL_SHAFT_FOREST,
   COL_SAND_DARK,
   COL_SAND_PALE,
   COL_SEAWEED,
@@ -72,6 +80,7 @@ import {
   COL_SHORE,
   COL_STONE,
   COL_STRATA,
+  COL_STUMP_TOP,
   COL_THATCH,
   COL_TIDE_POOL,
   COL_TRUNK,
@@ -87,7 +96,26 @@ import {
   DRIFTWOOD,
   DUNE_GRASS,
   FENCES,
+  FIREFLY_COUNT,
+  FOREST_BRIDGE,
+  FOREST_BUSH_BIG,
+  FOREST_BUSH_SMALL,
+  FOREST_FERNS,
+  FOREST_LOGS,
+  FOREST_MOSSY_ROCKS,
+  FOREST_MUSHROOMS,
+  FOREST_PATCHES,
+  FOREST_PATHS,
+  FOREST_POND,
+  FOREST_SHAFT_OPACITY,
+  FOREST_SHAFTS,
+  FOREST_STONE_CIRCLE,
+  FOREST_STONES,
+  FOREST_STREAM,
+  FOREST_STUMPS,
+  FOREST_TRUNK_MOSS,
   GATES,
+  GIANT_TREE,
   GULLS,
   HAMMER_MASS,
   HAMMER_PEDESTAL,
@@ -292,13 +320,22 @@ function buildPlaza(scene) {
 function buildRoads(scene) {
   // Varied widths per road; the longest gets a darker center wear strip.
   // The shore road ends at the beach gate: past it the terraces take over.
+  // The north road ends at the forest gate: past it the forest paths wind.
   flatStrip(scene, -10, 0, 20, 3.2, 0.02, COL_ROAD); // plaza -> beach gate
-  flatStrip(scene, 0, -29, 2.8, 58, 0.02, COL_ROAD); // plaza -> forest
+  flatStrip(scene, 0, -10, 2.8, 20, 0.02, COL_ROAD); // plaza -> forest gate
   flatStrip(scene, 10, 0, 20, 3.0, 0.02, COL_ROAD); // plaza -> pass
   flatStrip(scene, 32, 0, 24, 2.6, 0.02, COL_ARCH); // through the pass
-  flatStrip(scene, 0, -29, 1.2, 58, 0.05, COL_ROAD_WEAR); // worn middle
+  flatStrip(scene, 0, -10, 1.2, 20, 0.05, COL_ROAD_WEAR); // worn middle
   for (const [cx, cz, sx, sz, rotY] of SPURS) {
     flatStrip(scene, cx, cz, sx, sz, 0.025, COL_ROAD_WEAR, rotY);
+  }
+}
+
+// Forest paths (issue #8): winding dirt strips through the clearings, the
+// fork pad, the slalom shortcut, and spur patches. Visual-only.
+function buildForestPaths(scene) {
+  for (const [cx, cz, sx, sz, rotY] of FOREST_PATHS) {
+    flatStrip(scene, cx, cz, sx, sz, 0.02, COL_DIRT, rotY);
   }
 }
 
@@ -328,7 +365,7 @@ function buildEdgeStones(scene) {
     }
   }
   edging(-18, 0, -2, 0, 2.0); // shore road (half-width 1.6)
-  edging(0, -56, 0, -2, 1.8); // forest road (half-width 1.4)
+  edging(0, -18, 0, -2, 1.8); // north road to the forest gate (half-width 1.4)
   edging(2, 0, 18, 0, 1.9); // east road (half-width 1.5)
 }
 
@@ -480,6 +517,31 @@ function buildTrees(scene) {
     canopy.receiveShadow = true;
     scene.add(canopy);
   }
+}
+
+// The giant old tree (issue #8): the forest beacon. Double-height trunk,
+// wide base, big dark blob canopy poking above every other canopy. The trunk
+// collider in physics.js matches this transform.
+function buildGiantTree(scene) {
+  const [gx, gz, trunkH, trunkR, canopyR] = GIANT_TREE;
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(trunkR, trunkR * 1.25, trunkH, 9),
+    M(COL_TRUNK)
+  );
+  trunk.position.set(gx, trunkH / 2, gz);
+  trunk.castShadow = true;
+  trunk.receiveShadow = true;
+  scene.add(trunk);
+  const canopy = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(canopyR, 0),
+    M(COL_CANOPY[2])
+  );
+  canopy.position.set(gx, trunkH + canopyR * 0.6, gz);
+  canopy.castShadow = true;
+  canopy.receiveShadow = true;
+  scene.add(canopy);
+  // Mossy skirt where the trunk meets the ground.
+  flatPart(GEO.cyl10, M(COL_MOSS), 2.2, 0.1, 2.2, gx, 0.05, gz, 0.4, scene);
 }
 
 function buildRocks(scene) {
@@ -720,12 +782,12 @@ function buildShafts(scene) {
     m.rotation.z = 0.15;
     scene.add(m);
   }
-  // Dappled forest canopy light + ominous arena glow.
-  shaft(5, -35, 0xd8e8c0, 0.1);
-  shaft(-6, -45, 0xd8e8c0, 0.1);
-  shaft(10, -50, 0xd8e8c0, 0.09);
-  shaft(52, -6, 0xff6a4a, 0.05);
-  shaft(56, 6, 0xff6a4a, 0.05);
+  // Dappled forest canopy light over clearings and path gaps + arena glow.
+  for (const [x, z] of FOREST_SHAFTS) {
+    shaft(x, z, COL_SHAFT_FOREST, FOREST_SHAFT_OPACITY);
+  }
+  shaft(52, -6, COL_SHAFT_ARENA, 0.05);
+  shaft(56, 6, COL_SHAFT_ARENA, 0.05);
 }
 
 function buildFarSilhouettes(scene) {
@@ -900,6 +962,11 @@ function buildProps(scene) {
       part(GEO.cone4, steel, 0.12, 0.14, 0.04, 0, 0.88, 0, Math.PI, 0, 0, g);
       part(GEO.box, darkWood, 0.34, 0.08, 0.06, 0, 1.68, 0, 0, 0, 0, g);
       part(GEO.cyl8, darkWood, 0.05, 0.22, 0.05, 0, 1.82, 0, 0, 0, 0, g);
+    } else if (kind === 'hammer') {
+      // Hammer pictogram: head bar + handle, steel and wood.
+      const steel = M(0xb9c1c7, 0.5);
+      part(GEO.box, steel, 0.44, 0.2, 0.06, 0, 1.58, 0, 0, 0, 0, g);
+      part(GEO.cyl8, darkWood, 0.06, 0.55, 0.06, 0, 1.2, 0, 0, 0, 0, g);
     } else {
       part(GEO.box, wood, 0.7, 0.2, 0.25, 0, 1.35, 0, 0, 0, 0, g);
       part(GEO.cyl8, darkWood, 0.06, 0.5, 0.06, 0, 1.6, 0, 0, 0, 0, g);
@@ -1199,6 +1266,182 @@ function buildBeachDressing(scene) {
   }
 }
 
+// Pond clearing (issue #8): a still blue disc with a stone rim, ringed by
+// mushrooms (built below) and a bench log. Visual-only, no water physics.
+function buildForestPond(scene) {
+  const [px, pz, r] = FOREST_POND;
+  const pool = new THREE.Mesh(
+    new THREE.CylinderGeometry(r, r, 0.04, 20),
+    new THREE.MeshStandardMaterial({
+      color: COL_WATER, roughness: 0.5, metalness: 0, flatShading: true,
+    })
+  );
+  pool.position.set(px, 0.03, pz);
+  pool.receiveShadow = true;
+  scene.add(pool);
+  const rimMat = M(COL_ROCK);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + 0.3;
+    const rr = 0.16 + (i % 3) * 0.05;
+    flatPart(GEO.dodec, rimMat, rr * 2, rr, rr * 2,
+      px + Math.cos(a) * (r + 0.2), rr * 0.4, pz + Math.sin(a) * (r + 0.2), a, scene);
+  }
+}
+
+// Stream (issue #8): one narrow water strip west-east, visual-only, crossed
+// by the winding path on a log bridge and by the shortcut on stepping stones.
+// The deck and stones have matching walkable colliders in physics.js.
+function buildForestStream(scene) {
+  const [x0, x1, z0, z1] = FOREST_STREAM;
+  const mat = new THREE.MeshStandardMaterial({
+    color: COL_WATER, roughness: 0.55, metalness: 0, flatShading: true,
+  });
+  const strip = box(x1 - x0, 0.05, z1 - z0, mat, (x0 + x1) / 2, 0.04, (z0 + z1) / 2, false, false);
+  scene.add(strip);
+  // Log bridge: plank deck along the path with log rails and two posts.
+  const [bx, bz, ry] = FOREST_BRIDGE;
+  const g = new THREE.Group();
+  g.position.set(bx, 0, bz);
+  g.rotation.y = ry;
+  part(GEO.box, M(COL_BRIDGE), 2.5, 0.22, 3.5, 0, 0.14, 0, 0, 0, 0, g);
+  for (const sx of [-1.15, 1.15]) {
+    part(GEO.cyl8, M(COL_TRUNK), 0.22, 3.5, 0.22, sx, 0.36, 0, Math.PI / 2, 0, 0, g);
+    for (const sz of [-1.4, 1.4]) {
+      part(GEO.cyl8, M(COL_WOOD_DARK), 0.14, 0.7, 0.14, sx, 0.35, sz, 0, 0, 0, g);
+    }
+  }
+  scene.add(g);
+  // Stepping stones: flat cylinders the cube rolls over.
+  for (const [x, z] of FOREST_STONES) {
+    part(GEO.cyl10, M(COL_STONE), 0.9, 0.2, 0.9, x, 0.1, z, 0, 0, 0, scene);
+  }
+}
+
+// Forest floor (issue #8): ground patches, bushes, ferns, mushrooms, logs,
+// stumps, mossy rocks, trunk moss, and the stone circle. Blocking pieces have
+// matching colliders in physics.js; the rest is visual-only.
+function buildForestUndergrowth(scene) {
+  // Ground patches: moss, leaf litter, dirt.
+  const tones = { moss: M(COL_MOSS), leaf: M(COL_LEAF_LITTER), dirt: M(COL_DIRT) };
+  for (const [x, z, r, tone] of FOREST_PATCHES) {
+    flatPart(GEO.cyl10, tones[tone], r * 2, 0.04, r * 2, x, 0.015, z, x * 1.3, scene);
+  }
+  // Big bushes (block) + small bushes (visual). Grove-ring bushes included.
+  FOREST_BUSH_BIG.forEach(([x, z, r], i) => {
+    part(GEO.ico, M(COL_BUSH[i % 3]), r * 2, r * 1.5, r * 2, x, r * 0.55, z, 0, i * 0.7, 0, scene);
+  });
+  FOREST_BUSH_SMALL.forEach(([x, z, r], i) => {
+    part(GEO.ico, M(COL_BUSH[(i + 1) % 3]), r * 2, r * 1.5, r * 2, x, r * 0.55, z, 0, i, 0, scene);
+  });
+  // Ferns: fans of thin cones from a point.
+  const fernMat = M(COL_FERN);
+  for (const [x, z] of FOREST_FERNS) {
+    for (let s = 0; s < 4; s++) {
+      const tilt = -0.45 + s * 0.3;
+      const f = flatPart(GEO.cone6, fernMat, 0.16, 0.7, 0.16, x, 0.3, z, s * 0.8, scene);
+      f.rotation.z = tilt;
+    }
+  }
+  // Mushroom clusters: 3 tiny stem+cap pairs, muted cream/tan caps.
+  const stemMat = M(COL_MUSHROOM_STEM);
+  const capMat = M(COL_MUSHROOM_CAP);
+  FOREST_MUSHROOMS.forEach(([x, z], ci) => {
+    for (let s = 0; s < 3; s++) {
+      const ox = x + ((ci + s * 2) % 3 - 1) * 0.25;
+      const oz = z + ((ci * 2 + s) % 3 - 1) * 0.25;
+      const h = 0.16 + ((ci + s) % 3) * 0.05;
+      part(GEO.cyl8, stemMat, 0.07, h, 0.07, ox, h / 2, oz, 0, 0, 0, scene).castShadow = false;
+      part(GEO.sphere, capMat, 0.16, 0.1, 0.16, ox, h + 0.04, oz, 0, 0, 0, scene).castShadow = false;
+    }
+  });
+  // Fallen logs: horizontal bark cylinders. Same segment math as physics.js.
+  const logMat = M(COL_TRUNK);
+  for (const [x, z, rotY, len, twoSeg, r] of FOREST_LOGS) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.rotation.y = rotY;
+    if (!twoSeg) {
+      part(GEO.cyl8, logMat, r * 2, len, r * 2, 0, r, 0, 0, 0, Math.PI / 2, g);
+    } else {
+      const segLen = len * 0.6;
+      part(GEO.cyl8, logMat, r * 2, segLen, r * 2, -len * 0.2, r, 0, 0, 0, Math.PI / 2, g);
+      const seg2 = part(GEO.cyl8, logMat, r * 2, segLen, r * 2, len * 0.2, r, len * 0.15, 0, 0.5, Math.PI / 2, g);
+      void seg2;
+    }
+    scene.add(g);
+  }
+  // Stumps: short bark cylinders with flat pale tops.
+  for (const [x, z] of FOREST_STUMPS) {
+    part(GEO.cyl8, logMat, 0.5, 0.35, 0.5, x, 0.175, z, 0, 0, 0, scene);
+    part(GEO.cyl8, M(COL_STUMP_TOP), 0.44, 0.06, 0.44, x, 0.37, z, 0, 0, 0, scene);
+  }
+  // Mossy rocks: grey dodecahedrons with green caps. Squash matches the
+  // physics box cores (same 0.62 factor as beach rocks).
+  for (const [x, z, size] of FOREST_MOSSY_ROCKS) {
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(size * 0.5, 0), M(COL_ROCK));
+    m.scale.y = 0.62;
+    m.position.set(x, size * 0.31, z);
+    m.rotation.y = (x * 1.7 + z * 2.3) % Math.PI;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    scene.add(m);
+    flatPart(GEO.cyl8, M(COL_MOSS), size * 0.5, 0.06, size * 0.5, x, size * 0.62 + 0.02, z, x, scene);
+  }
+  // Moss on trunks: small green patches on a few old trunks.
+  for (const ti of FOREST_TRUNK_MOSS) {
+    const t = TREES[ti];
+    if (!t) continue;
+    const [tx, tz, trunkH] = t;
+    const side = (ti % 4) * (Math.PI / 2) + 0.4;
+    const nx = Math.cos(side);
+    const nz = Math.sin(side);
+    const patch = part(GEO.box, M(COL_MOSS), 0.06, 0.5, 0.4,
+      tx + nx * (TRUNK_RADIUS + 0.02), Math.min(trunkH * 0.4, 1.4), tz + nz * (TRUNK_RADIUS + 0.02),
+      0, -side, 0, scene);
+    patch.castShadow = false;
+  }
+  // Stone circle: mossy ring around the giant tree (gap faces the pedestal).
+  for (const [x, z, size] of FOREST_STONE_CIRCLE) {
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(size * 0.5, 0), M(COL_STONE));
+    m.scale.y = 0.7;
+    m.position.set(x, size * 0.35, z);
+    m.rotation.y = (x * 2.1 + z * 1.3) % Math.PI;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    scene.add(m);
+    flatPart(GEO.cyl8, M(COL_MOSS), size * 0.45, 0.05, size * 0.45, x, size * 0.7 + 0.01, z, z, scene);
+  }
+}
+
+// Fireflies (issue #8, garnish): one ambient points cloud drifting over the
+// pond and grove clearings. Muted green-gold, animated in main.js.
+function buildFireflies(scene) {
+  const rng = mulberry32(1234);
+  const pos = new Float32Array(FIREFLY_COUNT * 3);
+  const base = [];
+  for (let i = 0; i < FIREFLY_COUNT; i++) {
+    // Half over the pond clearing, half over the grove.
+    const cx = i % 2 === 0 ? FOREST_POND[0] : GIANT_TREE[0] + 2;
+    const cz = i % 2 === 0 ? FOREST_POND[1] : GIANT_TREE[1] + 1;
+    const x = cx + (rng() - 0.5) * 7;
+    const y = 0.5 + rng() * 2.2;
+    const z = cz + (rng() - 0.5) * 7;
+    pos[i * 3] = x;
+    pos[i * 3 + 1] = y;
+    pos[i * 3 + 2] = z;
+    base.push([x, y, z, rng() * Math.PI * 2]);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({
+    color: COL_FIREFLY, size: 0.12, transparent: true, opacity: 0.8,
+    sizeAttenuation: true, depthWrite: false,
+  });
+  const points = new THREE.Points(geo, mat);
+  scene.add(points);
+  return { points, base };
+}
+
 function buildSky(scene) {
   // Gulls circling the shore (animated in main.js).
   const gulls = GULLS.map(([cx, h, cz, r, speed], i) => {
@@ -1239,6 +1482,7 @@ export function buildLevel(scene) {
 
   buildPlaza(scene);
   buildRoads(scene);
+  buildForestPaths(scene);
   buildPatches(scene);
   buildEdgeStones(scene);
   buildScatter(scene);
@@ -1249,6 +1493,7 @@ export function buildLevel(scene) {
   buildWalls(scene);
   buildHills(scene);
   buildTrees(scene);
+  buildGiantTree(scene);
   buildRocks(scene);
   buildHuts(scene);
   buildProps(scene);
@@ -1261,11 +1506,15 @@ export function buildLevel(scene) {
   buildStones(scene);
   buildPedestals(scene);
   buildBeachDressing(scene);
+  buildForestPond(scene);
+  buildForestStream(scene);
+  buildForestUndergrowth(scene);
   const { lavaMats } = buildLava(scene);
   buildShafts(scene);
   buildFarSilhouettes(scene);
   const { gulls, clouds } = buildSky(scene);
-  return { lavaMats, gulls, clouds };
+  const { points: fireflies, base: fireflyBase } = buildFireflies(scene);
+  return { lavaMats, gulls, clouds, fireflies, fireflyBase };
 }
 
 export function buildPlayerMesh() {

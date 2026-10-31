@@ -12,9 +12,11 @@ Cube character with a face, orbit-to-aim follow camera, charge-and-flick movemen
 fixed-timestep physics, full hub-and-spoke world (village hub, beach, forest,
 mountain pass, boss arena), dressed village (7 huts, plaza, props, pier,
 gates), terraced beach (layered shelves, switchback ramps, gentle/steep fork,
-sword cove, shore dressing, pier), collectible weapons that attach with mass
-+ colliders, per-zone fog, synthesized audio, `?debug=1` state bridge.
-No build step.
+sword cove, shore dressing, pier), navigable forest grove (thicket walls,
+4 clearings, winding paths, slalom shortcut, pond, lookout hill, giant tree,
+hammer grove, stream with bridge and stepping stones), collectible weapons
+that attach with mass + colliders, per-zone fog, synthesized audio,
+`?debug=1` state bridge. No build step.
 
 ## Run it
 

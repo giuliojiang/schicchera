@@ -71,7 +71,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(FOG_VILLAGE);
 scene.fog = new THREE.FogExp2(FOG_VILLAGE, FOG_DENSITY);
 const { sun } = buildLights(scene);
-const { lavaMats, gulls, clouds } = buildLevel(scene);
+const { lavaMats, gulls, clouds, fireflies, fireflyBase } = buildLevel(scene);
 const playerMesh = buildPlayerMesh();
 scene.add(playerMesh);
 
@@ -338,6 +338,18 @@ function updateWorld(dt) {
   for (const c of clouds) {
     c.m.position.x += dt * 0.3;
     if (c.m.position.x > 35) c.m.position.x = -35;
+  }
+
+  // Fireflies drift slowly over the pond and grove clearings.
+  if (fireflies && fireflyBase) {
+    const p = fireflies.geometry.attributes.position;
+    for (let i = 0; i < fireflyBase.length; i++) {
+      const [bx, by, bz, ph] = fireflyBase[i];
+      p.array[i * 3] = bx + Math.sin(animT * 0.4 + ph) * 0.5;
+      p.array[i * 3 + 1] = by + Math.sin(animT * 0.6 + ph * 1.7) * 0.3;
+      p.array[i * 3 + 2] = bz + Math.cos(animT * 0.35 + ph) * 0.5;
+    }
+    p.needsUpdate = true;
   }
 
   // Pickups bob, spin, and glint until collected.

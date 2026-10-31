@@ -27,7 +27,15 @@ import {
   CUBE_MASS,
   FENCES,
   FIXED_DT,
+  FOREST_BRIDGE,
+  FOREST_BUSH_BIG,
+  FOREST_LOGS,
+  FOREST_MOSSY_ROCKS,
+  FOREST_STONE_CIRCLE,
+  FOREST_STONES,
+  FOREST_STUMPS,
   GATES,
+  GIANT_TREE,
   GRAVITY_Y,
   GROUND_FRICTION,
   GROUND_RESTITUTION,
@@ -256,10 +264,73 @@ export function createStaticLevel(world) {
     addBox(tx, trunkH / 2, tz, w, trunkH, w);
   }
 
+  // Giant old tree: wide trunk, same pattern.
+  {
+    const [gx, gz, trunkH, trunkR] = GIANT_TREE;
+    addBox(gx, trunkH / 2, gz, trunkR * 2, trunkH, trunkR * 2);
+  }
+
   // Rocks (box cores inside the squashed-dodecahedron visuals).
   for (const [rx, rz, size, gy = 0] of ROCKS) {
     const w = size * 0.9;
     addBox(rx, gy + (size * 0.62) / 2, rz, w, size * 0.62, w);
+  }
+
+  // Forest dressing with colliders (issue #8). Visuals in level.js mirror
+  // every transform. Mossy rocks and large circle stones block like rocks;
+  // big bushes use the village box approx; logs/stumps/bridge/stones are low
+  // roll-over bumps or walkable decks (ground=true).
+  for (const [x, z, r] of FOREST_BUSH_BIG) {
+    addBox(x, r / 2, z, r * 1.5, r, r * 1.5);
+  }
+  for (const [x, z, size] of FOREST_MOSSY_ROCKS) {
+    const w = size * 0.9;
+    addBox(x, (size * 0.62) / 2, z, w, size * 0.62, w);
+  }
+  for (const [x, z, size] of FOREST_STONE_CIRCLE) {
+    if (size < 0.7) continue; // small circle stones are visual-only
+    const w = size * 0.9;
+    addBox(x, (size * 0.62) / 2, z, w, size * 0.62, w);
+  }
+  // Fallen logs: low boxes the cube rolls over. Same segment math as
+  // level.js: single logs span len; two-segment logs angle at the middle.
+  for (const [x, z, rotY, len, twoSeg, r] of FOREST_LOGS) {
+    const h = r * 2;
+    if (!twoSeg) {
+      addBox(x, r, z, len, h, h, 0, rotY, 0);
+    } else {
+      const segLen = len * 0.6;
+      const c = Math.cos(rotY);
+      const s = Math.sin(rotY);
+      // Local (-len*0.2, 0) and (len*0.2, len*0.15), rotated to world.
+      const lx1 = -len * 0.2;
+      const lz1 = 0;
+      const lx2 = len * 0.2;
+      const lz2 = len * 0.15;
+      addBox(x + lx1 * c + lz1 * s, r, z - lx1 * s + lz1 * c, segLen, h, h, 0, rotY, 0);
+      addBox(
+        x + lx2 * c + lz2 * s,
+        r,
+        z - lx2 * s + lz2 * c,
+        segLen,
+        h,
+        h,
+        0,
+        rotY + 0.5,
+        0
+      );
+    }
+  }
+  for (const [x, z] of FOREST_STUMPS) {
+    addBox(x, 0.2, z, 0.5, 0.4, 0.5);
+  }
+  // Log-bridge deck (walkable) and stepping stones (walkable bumps).
+  {
+    const [bx, bz, ry] = FOREST_BRIDGE;
+    addBox(bx, 0.125, bz, 2.5, 0.25, 3.5, 0, ry, 0, true);
+  }
+  for (const [x, z] of FOREST_STONES) {
+    addBox(x, 0.1, z, 0.9, 0.2, 0.9, 0, 0, 0, true);
   }
 
   // Stone arch: pillars + lintel.
