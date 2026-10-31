@@ -10,8 +10,9 @@ Spec: [issue #1](https://github.com/giuliojiang/schicchera/issues/1)
 Cube character with a face, orbit-to-aim follow camera, charge-and-flick movement
 (quadratic charge, additive velocity, speed clamp), ground/air drag switching,
 fixed-timestep physics, full hub-and-spoke world (village hub, beach, forest,
-mountain pass, boss arena), collectible weapons that attach with mass +
-colliders, per-zone fog, synthesized audio, `?debug=1` state bridge. No build step.
+mountain pass, boss arena), dressed village (7 huts, plaza, props, pier,
+gates), collectible weapons that attach with mass + colliders, per-zone fog,
+synthesized audio, `?debug=1` state bridge. No build step.
 
 ## Run it
 

@@ -66,13 +66,13 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(FOG_VILLAGE);
 scene.fog = new THREE.FogExp2(FOG_VILLAGE, FOG_DENSITY);
 const { sun } = buildLights(scene);
-const { lavaMats } = buildLevel(scene);
+const { lavaMats, gulls, clouds } = buildLevel(scene);
 const playerMesh = buildPlayerMesh();
 scene.add(playerMesh);
 
 // Weapon pickups: dagger at the plaza, sword on the beach, hammer in the forest.
 const pickups = PICKUPS.map(([id, x, baseY, z], i) => {
-  const { group, glintMats } = buildPickup(id, baseY);
+  const { group, glintMats } = buildPickup(id);
   group.position.set(x, baseY, z);
   scene.add(group);
   return { id, group, glintMats, baseY, taken: false, phase: i * 2.1 };
@@ -266,6 +266,24 @@ function updateWorld(dt) {
   // Lava breathes (emissive pulse; the only saturated color in the game).
   const lavaGlow = 1.8 + 0.5 * Math.sin(animT * 2.2);
   for (const m of lavaMats) m.emissiveIntensity = lavaGlow;
+
+  // Gulls circle the shore, wings flapping; clouds drift slowly.
+  for (const gu of gulls) {
+    const a = animT * gu.speed + gu.phase;
+    gu.g.position.set(
+      gu.cx + Math.cos(a) * gu.r,
+      gu.h + Math.sin(animT * 0.5 + gu.phase) * 0.4,
+      gu.cz + Math.sin(a) * gu.r * 0.7
+    );
+    gu.g.rotation.y = Math.atan2(-Math.sin(a) * gu.r, Math.cos(a) * gu.r * 0.7);
+    const flap = Math.sin(animT * 6 + gu.phase) * 0.5;
+    gu.wingL.rotation.z = 0.2 + flap;
+    gu.wingR.rotation.z = -0.2 - flap;
+  }
+  for (const c of clouds) {
+    c.m.position.x += dt * 0.3;
+    if (c.m.position.x > 35) c.m.position.x = -35;
+  }
 
   // Pickups bob, spin, and glint until collected.
   for (const p of pickups) {

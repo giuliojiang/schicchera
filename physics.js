@@ -2,30 +2,43 @@
 import * as CANNON from 'cannon-es';
 import {
   ARCH,
+  BARRELS,
+  BENCHES,
+  BOAT,
   BOSS_GROUND_DRAG,
   BRIDGE_CREST_H,
   BRIDGE_SPAN,
   BRIDGE_THICK,
   BRIDGES,
+  BUSH_BIG,
+  CART,
   CHANNEL_Z0,
   CHANNEL_Z1,
+  CRATES,
   CUBE_MASS,
+  FENCES,
   FIXED_DT,
+  GATES,
   GRAVITY_Y,
   GROUND_FRICTION,
   GROUND_RESTITUTION,
   HILLS,
   HUT_BODY,
   HUTS,
+  LANTERNS,
+  PIER,
   PLAYER_AIR_DRAG,
   PLAYER_ANGULAR_DAMPING,
   PLAYER_GROUND_DRAG,
   PLAYER_SIZE,
   PLAYER_SPAWN,
   ROCKS,
+  SIGNS,
+  STALL,
   TREES,
   TRUNK_RADIUS,
   WALLS,
+  WELL,
   ZONE_ARENA,
   ZONE_BEACH,
   ZONE_FOREST,
@@ -123,9 +136,56 @@ export function createStaticLevel(world) {
   }
 
   // Hut bodies (roofs are above reach; body collider blocks entry).
-  for (const [hx, hz, rotY] of HUTS) {
-    addBox(hx, HUT_BODY[1] / 2, hz, HUT_BODY[0], HUT_BODY[1], HUT_BODY[2], 0, rotY, 0);
+  for (const [hx, hz, rotY, , , bodyH] of HUTS) {
+    const h = bodyH || HUT_BODY[1];
+    addBox(hx, h / 2, hz, HUT_BODY[0], h, HUT_BODY[2], 0, rotY, 0);
   }
+
+  // Village props. Every blocking prop has a collider matching its visual.
+  for (const [x, z, rotY, s, dy] of CRATES) {
+    addBox(x, s / 2 + dy, z, s, s, s, 0, rotY, 0);
+  }
+  for (const [x, z] of BARRELS) {
+    addBox(x, 0.45, z, 0.7, 0.9, 0.7);
+  }
+  for (const [x1, z1, x2, z2] of FENCES) {
+    const len = Math.hypot(x2 - x1, z2 - z1);
+    addBox((x1 + x2) / 2, 0.5, (z1 + z2) / 2, 0.3, 1.0, len + 0.3, 0, Math.atan2(x2 - x1, z2 - z1), 0);
+  }
+  for (const [x, z, rotY] of BENCHES) {
+    addBox(x, 0.3, z, 1.6, 0.6, 0.6, 0, rotY, 0);
+  }
+  for (const [x, z] of LANTERNS) {
+    addBox(x, 1.3, z, 0.25, 2.6, 0.25);
+  }
+  addBox(STALL[0], 1.0, STALL[1], 2.2, 2.0, 1.6, 0, STALL[2], 0);
+  addBox(WELL[0], 0.6, WELL[1], 1.4, 1.2, 1.4);
+  addBox(CART[0], 0.5, CART[1], 2.2, 1.0, 1.4, 0, CART[2], 0);
+  for (const [x, z, rotY] of SIGNS) {
+    addBox(x, 1.0, z, 0.3, 2.0, 0.3, 0, rotY, 0);
+  }
+  for (const [x, z, rotY, postH, halfGap] of GATES) {
+    // Posts at local x +/- halfGap.
+    const c = Math.cos(rotY);
+    const s = Math.sin(rotY);
+    addBox(x + c * halfGap, postH / 2, z - s * halfGap, 0.35, postH, 0.35);
+    addBox(x - c * halfGap, postH / 2, z + s * halfGap, 0.35, postH, 0.35);
+  }
+  for (const [x, z, r] of BUSH_BIG) {
+    addBox(x, r / 2, z, r * 1.5, r, r * 1.5);
+  }
+  // Pier deck + side/end rails (rails keep the player over the slab).
+  {
+    const [x0, x1, z, w, topY] = PIER;
+    const len = Math.abs(x1 - x0);
+    const cx = (x0 + x1) / 2;
+    addBox(cx, topY / 2, z, len, topY, w, 0, 0, 0, true);
+    addBox(cx, 0.5, z - w / 2, len, 1.0, 0.15);
+    addBox(cx, 0.5, z + w / 2, len, 1.0, 0.15);
+    addBox(Math.min(x0, x1), 0.5, z, 0.15, 1.0, w + 0.3);
+  }
+  // Beached boat hull.
+  addBox(BOAT[0], 0.4, BOAT[1], 2.8, 0.8, 1.3, 0, BOAT[2], 0);
 
   // Tree trunks (canopies are above reach).
   for (const [tx, tz, trunkH] of TREES) {
