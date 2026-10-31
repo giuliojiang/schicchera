@@ -3,6 +3,15 @@ import * as CANNON from 'cannon-es';
 import {
   ARCH,
   BARRELS,
+  BEACH_BASE_Y,
+  BEACH_PARAPET_H,
+  BEACH_PARAPET_T,
+  BEACH_PARAPETS,
+  BEACH_RAMP_THICK,
+  BEACH_RAMPS,
+  BEACH_SHELVES,
+  BEACH_SLAB,
+  BEACH_STONES,
   BENCHES,
   BOAT,
   BOSS_GROUND_DRAG,
@@ -27,6 +36,7 @@ import {
   HUTS,
   LANTERNS,
   PIER,
+  PIER_PLATFORM,
   PLAYER_AIR_DRAG,
   PLAYER_ANGULAR_DAMPING,
   PLAYER_GROUND_DRAG,
@@ -40,7 +50,6 @@ import {
   WALLS,
   WELL,
   ZONE_ARENA,
-  ZONE_BEACH,
   ZONE_FOREST,
   ZONE_PASS,
   ZONE_VILLAGE,
@@ -91,19 +100,65 @@ export function createStaticLevel(world) {
     return body;
   }
 
-  function addSlab(zone) {
+  function addSlab(zone, topY = 0) {
     const sx = zone.x1 - zone.x0;
     const sz = zone.z1 - zone.z0;
-    // Top surface at y=0.
-    return addBox((zone.x0 + zone.x1) / 2, -0.5, (zone.z0 + zone.z1) / 2, sx, 1, sz, 0, 0, 0, true);
+    return addBox((zone.x0 + zone.x1) / 2, topY - 0.5, (zone.z0 + zone.z1) / 2, sx, 1, sz, 0, 0, 0, true);
   }
 
-  // Zone ground slabs (butt joints, all tops at y=0).
+  // Zone ground slabs (butt joints). The beach base sits low at BEACH_BASE_Y
+  // and stops at the shore ridge; shelves rise from it toward the village.
   addSlab(ZONE_VILLAGE);
-  addSlab(ZONE_BEACH);
+  addSlab(BEACH_SLAB, BEACH_BASE_Y);
   addSlab(ZONE_FOREST);
   addSlab(ZONE_PASS);
   addSlab(ZONE_ARENA);
+
+  // Beach shelves: tall boxes rising from the base, tops are walkable ground,
+  // sides are cliff faces. Full beach width in z.
+  for (const [x0, x1, top] of BEACH_SHELVES) {
+    const sx = x1 - x0;
+    const sy = top - BEACH_BASE_Y;
+    addBox((x0 + x1) / 2, (top + BEACH_BASE_Y) / 2, 0, sx, sy, 40, 0, 0, 0, true);
+  }
+
+  // Beach ramps: inclined boxes spanning each cliff. East end high (+X up).
+  for (const [xE, xW, zC, w, tE, tW] of BEACH_RAMPS) {
+    const run = xE - xW;
+    const drop = tE - tW;
+    const len = Math.hypot(run, drop);
+    const ang = Math.atan2(drop, run);
+    const topC = (tE + tW) / 2;
+    addBox(
+      (xE + xW) / 2,
+      topC - (BEACH_RAMP_THICK / 2) * Math.cos(ang),
+      zC,
+      len,
+      BEACH_RAMP_THICK,
+      w,
+      0,
+      0,
+      ang,
+      true
+    );
+  }
+
+  // Cliff-edge parapets: low rock walls with gaps at ramps and drops.
+  for (const [edgeX, z0, z1, baseY] of BEACH_PARAPETS) {
+    addBox(
+      edgeX + BEACH_PARAPET_T / 2,
+      baseY + BEACH_PARAPET_H / 2,
+      (z0 + z1) / 2,
+      BEACH_PARAPET_T,
+      BEACH_PARAPET_H,
+      z1 - z0
+    );
+  }
+
+  // Standing stones.
+  for (const [x, z, baseY, h] of BEACH_STONES) {
+    addBox(x, baseY + h / 2, z, 0.7, h, 0.5);
+  }
 
   // Boundary walls (visible except the 'none' shoreline wall).
   for (const [x, y, z, sx, sy, sz] of WALLS) {
@@ -142,18 +197,19 @@ export function createStaticLevel(world) {
   }
 
   // Village props. Every blocking prop has a collider matching its visual.
-  for (const [x, z, rotY, s, dy] of CRATES) {
-    addBox(x, s / 2 + dy, z, s, s, s, 0, rotY, 0);
+  // Beach props carry their shelf/beach height in the trailing baseY element.
+  for (const [x, z, rotY, s, dy, by = 0] of CRATES) {
+    addBox(x, by + s / 2 + dy, z, s, s, s, 0, rotY, 0);
   }
-  for (const [x, z] of BARRELS) {
-    addBox(x, 0.45, z, 0.7, 0.9, 0.7);
+  for (const [x, z, by = 0] of BARRELS) {
+    addBox(x, by + 0.45, z, 0.7, 0.9, 0.7);
   }
-  for (const [x1, z1, x2, z2] of FENCES) {
+  for (const [x1, z1, x2, z2, by = 0] of FENCES) {
     const len = Math.hypot(x2 - x1, z2 - z1);
-    addBox((x1 + x2) / 2, 0.5, (z1 + z2) / 2, 0.3, 1.0, len + 0.3, 0, Math.atan2(x2 - x1, z2 - z1), 0);
+    addBox((x1 + x2) / 2, by + 0.5, (z1 + z2) / 2, 0.3, 1.0, len + 0.3, 0, Math.atan2(x2 - x1, z2 - z1), 0);
   }
-  for (const [x, z, rotY] of BENCHES) {
-    addBox(x, 0.3, z, 1.6, 0.6, 0.6, 0, rotY, 0);
+  for (const [x, z, rotY, by = 0] of BENCHES) {
+    addBox(x, by + 0.3, z, 1.6, 0.6, 0.6, 0, rotY, 0);
   }
   for (const [x, z] of LANTERNS) {
     addBox(x, 1.3, z, 0.25, 2.6, 0.25);
@@ -174,18 +230,25 @@ export function createStaticLevel(world) {
   for (const [x, z, r] of BUSH_BIG) {
     addBox(x, r / 2, z, r * 1.5, r, r * 1.5);
   }
-  // Pier deck + side/end rails (rails keep the player over the slab).
+  // Pier deck + end platform (walkable) with rails all around: there is no
+  // ground under the pier, so the rails are what keep the player out of the sea.
   {
     const [x0, x1, z, w, topY] = PIER;
+    const [platX, platZ, platS] = PIER_PLATFORM;
     const len = Math.abs(x1 - x0);
     const cx = (x0 + x1) / 2;
-    addBox(cx, topY / 2, z, len, topY, w, 0, 0, 0, true);
-    addBox(cx, 0.5, z - w / 2, len, 1.0, 0.15);
-    addBox(cx, 0.5, z + w / 2, len, 1.0, 0.15);
-    addBox(Math.min(x0, x1), 0.5, z, 0.15, 1.0, w + 0.3);
+    const deckT = 0.15;
+    addBox(cx, topY - deckT / 2, z, len, deckT, w, 0, 0, 0, true);
+    addBox(platX, topY - deckT / 2, platZ, platS, deckT, platS, 0, 0, 0, true);
+    const railY = topY + 0.5;
+    addBox(cx, railY, z - w / 2 + 0.08, len, 1.0, 0.15);
+    addBox(cx, railY, z + w / 2 - 0.08, len, 1.0, 0.15);
+    addBox(platX, railY, platZ - platS / 2 + 0.08, platS, 1.0, 0.15);
+    addBox(platX, railY, platZ + platS / 2 - 0.08, platS, 1.0, 0.15);
+    addBox(platX - platS / 2, railY, platZ, 0.15, 1.0, platS + 0.15);
   }
   // Beached boat hull.
-  addBox(BOAT[0], 0.4, BOAT[1], 2.8, 0.8, 1.3, 0, BOAT[2], 0);
+  addBox(BOAT[0], (BOAT[3] || 0) + 0.4, BOAT[1], 2.8, 0.8, 1.3, 0, BOAT[2], 0);
 
   // Tree trunks (canopies are above reach).
   for (const [tx, tz, trunkH] of TREES) {
@@ -194,9 +257,9 @@ export function createStaticLevel(world) {
   }
 
   // Rocks (box cores inside the squashed-dodecahedron visuals).
-  for (const [rx, rz, size] of ROCKS) {
+  for (const [rx, rz, size, gy = 0] of ROCKS) {
     const w = size * 0.9;
-    addBox(rx, (size * 0.62) / 2, rz, w, size * 0.62, w);
+    addBox(rx, gy + (size * 0.62) / 2, rz, w, size * 0.62, w);
   }
 
   // Stone arch: pillars + lintel.

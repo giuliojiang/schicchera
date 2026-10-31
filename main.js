@@ -114,6 +114,21 @@ let lastDt = 0;
 let zone = 'village';
 let animT = 0;
 
+// Dev-only spawn override for level inspection: ?at=x,z[,y]&orbit=rad.
+{
+  const q = new URLSearchParams(location.search);
+  if (q.has('at')) {
+    const [ax, az, ay] = q.get('at').split(',').map(Number);
+    if (Number.isFinite(ax) && Number.isFinite(az)) {
+      playerBody.position.set(ax, Number.isFinite(ay) ? ay : 2, az);
+      playerBody.velocity.set(0, 0, 0);
+      playerBody.angularVelocity.set(0, 0, 0);
+    }
+  }
+  const orb = Number(q.get('orbit'));
+  if (Number.isFinite(orb)) orbitAngle = orb;
+}
+
 const ZONES = {
   village: ZONE_VILLAGE,
   beach: ZONE_BEACH,

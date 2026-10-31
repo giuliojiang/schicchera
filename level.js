@@ -6,6 +6,20 @@ import {
   ARCH,
   ARENA_CENTER,
   BARRELS,
+  BEACH_BASE_Y,
+  BEACH_CAIRNS,
+  BEACH_PARAPET_H,
+  BEACH_PARAPET_T,
+  BEACH_PARAPETS,
+  BEACH_RAMP_THICK,
+  BEACH_RAMPS,
+  BEACH_SHELL_COUNT,
+  BEACH_SHELL_SEED,
+  BEACH_SHELVES,
+  BEACH_SLAB,
+  BEACH_STONES,
+  BEACH_TUFT_SEED,
+  BEACH_TUFTS_PER_SHELF,
   BENCHES,
   BOAT,
   BRIDGE_CREST_H,
@@ -27,8 +41,10 @@ import {
   COL_CLOUD,
   COL_DIRT,
   COL_DOOR,
+  COL_DRIFTWOOD,
   COL_EYE,
   COL_FLOWER,
+  COL_FOAM,
   COL_FOREST_GROUND,
   COL_GLASS,
   COL_GULL,
@@ -44,12 +60,20 @@ import {
   COL_PLAZA,
   COL_PLAZA_RING,
   COL_PLAYER,
+  COL_RAMP,
   COL_ROAD,
   COL_ROAD_WEAR,
   COL_ROCK,
+  COL_SAND_DARK,
+  COL_SAND_PALE,
+  COL_SEAWEED,
+  COL_SHELF_TOP,
+  COL_SHELL,
   COL_SHORE,
   COL_STONE,
+  COL_STRATA,
   COL_THATCH,
+  COL_TIDE_POOL,
   COL_TRUNK,
   COL_VILLAGE_GROUND,
   COL_WALL_DUNE,
@@ -60,10 +84,13 @@ import {
   COL_WOOD_DARK,
   CRATES,
   DAGGER_MASS,
+  DRIFTWOOD,
+  DUNE_GRASS,
   FENCES,
   GATES,
   GULLS,
   HAMMER_MASS,
+  HAMMER_PEDESTAL,
   HEMI_GROUND,
   HEMI_INTENSITY,
   HEMI_SKY,
@@ -75,15 +102,20 @@ import {
   LAUNDRY,
   PATCHES,
   PIER,
+  PIER_PLATFORM,
   PLAYER_SIZE,
   PLAYER_SPAWN,
   POTS,
   ROCKS,
   ROPE,
+  SAND_PATCHES,
   SCATTER_COUNT,
   SCATTER_SEED,
+  SEAWEED,
+  SEA_TOP_Y,
   SHADOW_EXTENT,
   SHADOW_MAP_SIZE,
+  SHELF_BUSHES,
   SHORE_X,
   SIGNS,
   SPURS,
@@ -91,13 +123,14 @@ import {
   SUN_COLOR,
   SUN_INTENSITY,
   SUN_OFFSET,
+  SWORD_COVE,
   SWORD_MASS,
+  TIDE_POOLS,
   TREES,
   TRUNK_RADIUS,
   WALLS,
   WELL,
   ZONE_ARENA,
-  ZONE_BEACH,
   ZONE_FOREST,
   ZONE_PASS,
   ZONE_VILLAGE,
@@ -197,7 +230,7 @@ export function buildLights(scene) {
   return { sun };
 }
 
-function slab(scene, zone, color) {
+function slab(scene, zone, color, topY = 0) {
   const sx = zone.x1 - zone.x0;
   const sz = zone.z1 - zone.z0;
   const m = box(
@@ -206,7 +239,7 @@ function slab(scene, zone, color) {
     sz,
     matte(color),
     (zone.x0 + zone.x1) / 2,
-    -0.5,
+    topY - 0.5,
     (zone.z0 + zone.z1) / 2,
     false,
     true
@@ -258,7 +291,8 @@ function buildPlaza(scene) {
 
 function buildRoads(scene) {
   // Varied widths per road; the longest gets a darker center wear strip.
-  flatStrip(scene, -26, 0, 52, 3.2, 0.02, COL_ROAD); // plaza -> shore
+  // The shore road ends at the beach gate: past it the terraces take over.
+  flatStrip(scene, -10, 0, 20, 3.2, 0.02, COL_ROAD); // plaza -> beach gate
   flatStrip(scene, 0, -29, 2.8, 58, 0.02, COL_ROAD); // plaza -> forest
   flatStrip(scene, 10, 0, 20, 3.0, 0.02, COL_ROAD); // plaza -> pass
   flatStrip(scene, 32, 0, 24, 2.6, 0.02, COL_ARCH); // through the pass
@@ -266,8 +300,6 @@ function buildRoads(scene) {
   for (const [cx, cz, sx, sz, rotY] of SPURS) {
     flatStrip(scene, cx, cz, sx, sz, 0.025, COL_ROAD_WEAR, rotY);
   }
-  // Wet-sand shore strip where the slab meets the sea.
-  flatStrip(scene, -58, 2, 4, 16, 0.02, COL_SHORE);
 }
 
 function buildPatches(scene) {
@@ -295,7 +327,7 @@ function buildEdgeStones(scene) {
       }
     }
   }
-  edging(-50, 0, -2, 0, 2.0); // shore road (half-width 1.6)
+  edging(-18, 0, -2, 0, 2.0); // shore road (half-width 1.6)
   edging(0, -56, 0, -2, 1.8); // forest road (half-width 1.4)
   edging(2, 0, 18, 0, 1.9); // east road (half-width 1.5)
 }
@@ -452,10 +484,10 @@ function buildTrees(scene) {
 
 function buildRocks(scene) {
   const mat = matte(COL_ROCK);
-  for (const [x, z, size] of ROCKS) {
+  for (const [x, z, size, gy = 0] of ROCKS) {
     const m = new THREE.Mesh(new THREE.DodecahedronGeometry(size * 0.5, 0), mat);
     m.scale.y = 0.62; // squash matches the physics box core
-    m.position.set(x, size * 0.31, z);
+    m.position.set(x, gy + size * 0.31, z);
     m.rotation.y = (x * 1.7 + z * 2.3) % Math.PI;
     m.castShadow = true;
     m.receiveShadow = true;
@@ -636,8 +668,8 @@ function buildWater(scene) {
   const chan = box(ZONE_VILLAGE.x1 - ZONE_VILLAGE.x0, 0.05, CHANNEL_Z1 - CHANNEL_Z0, mat,
     0, 0.04, (CHANNEL_Z0 + CHANNEL_Z1) / 2, false, false);
   scene.add(chan);
-  // Open sea beyond the shoreline.
-  const sea = box(SHORE_X - -85, 0.1, 64, mat, (SHORE_X + -85) / 2, -0.65, 0, false, false);
+  // Open sea beyond the shoreline ridge (visual only, no ground below).
+  const sea = box(SHORE_X - -85, 0.1, 64, mat, (SHORE_X + -85) / 2, SEA_TOP_Y - 0.05, 0, false, false);
   scene.add(sea);
 }
 
@@ -717,43 +749,43 @@ function buildProps(scene) {
   const darkWood = M(COL_WOOD_DARK);
   const stone = M(COL_STONE);
   // Crates (some stacked).
-  for (const [x, z, ry, s, dy] of CRATES) {
-    part(GEO.box, wood, s, s, s, x, s / 2 + dy, z, 0, ry, 0, scene);
+  for (const [x, z, ry, s, dy, by = 0] of CRATES) {
+    part(GEO.box, wood, s, s, s, x, by + s / 2 + dy, z, 0, ry, 0, scene);
   }
   // Barrels with two band rings.
-  for (const [x, z] of BARRELS) {
-    part(GEO.cyl10, wood, 0.7, 0.9, 0.7, x, 0.45, z, 0, 0, 0, scene);
-    part(GEO.cyl10, darkWood, 0.72, 0.07, 0.72, x, 0.25, z, 0, 0, 0, scene);
-    part(GEO.cyl10, darkWood, 0.72, 0.07, 0.72, x, 0.65, z, 0, 0, 0, scene);
+  for (const [x, z, by = 0] of BARRELS) {
+    part(GEO.cyl10, wood, 0.7, 0.9, 0.7, x, by + 0.45, z, 0, 0, 0, scene);
+    part(GEO.cyl10, darkWood, 0.72, 0.07, 0.72, x, by + 0.25, z, 0, 0, 0, scene);
+    part(GEO.cyl10, darkWood, 0.72, 0.07, 0.72, x, by + 0.65, z, 0, 0, 0, scene);
   }
   // Fence runs: posts + two rails; the shore run gets a draped net.
-  FENCES.forEach(([x1, z1, x2, z2], fi) => {
+  FENCES.forEach(([x1, z1, x2, z2, by = 0], fi) => {
     const len = Math.hypot(x2 - x1, z2 - z1);
     const ry = Math.atan2(x2 - x1, z2 - z1);
     const n = Math.max(2, Math.round(len / 1.3) + 1);
     for (let i = 0; i < n; i++) {
       const t = i / (n - 1);
-      part(GEO.box, darkWood, 0.12, 1.0, 0.12, x1 + (x2 - x1) * t, 0.5, z1 + (z2 - z1) * t, 0, 0, 0, scene);
+      part(GEO.box, darkWood, 0.12, 1.0, 0.12, x1 + (x2 - x1) * t, by + 0.5, z1 + (z2 - z1) * t, 0, 0, 0, scene);
     }
     const cx = (x1 + x2) / 2;
     const cz = (z1 + z2) / 2;
-    part(GEO.box, wood, 0.08, 0.08, len, cx, 0.55, cz, 0, ry, 0, scene);
-    part(GEO.box, wood, 0.08, 0.08, len, cx, 0.88, cz, 0, ry, 0, scene);
+    part(GEO.box, wood, 0.08, 0.08, len, cx, by + 0.55, cz, 0, ry, 0, scene);
+    part(GEO.box, wood, 0.08, 0.08, len, cx, by + 0.88, cz, 0, ry, 0, scene);
     if (fi === 2) {
       // Draped fishing net on the shore run (plane width aligned with the run).
       const net = new THREE.Mesh(GEO.plane, new THREE.MeshStandardMaterial({
         color: COL_NET, roughness: 1, metalness: 0, side: THREE.DoubleSide,
       }));
       net.scale.set(len * 0.7, 0.7, 1);
-      net.position.set(cx + ((z2 - z1) / len) * 0.12, 0.55, cz - ((x2 - x1) / len) * 0.12);
+      net.position.set(cx + ((z2 - z1) / len) * 0.12, by + 0.55, cz - ((x2 - x1) / len) * 0.12);
       net.rotation.y = ry - Math.PI / 2;
       scene.add(net);
     }
   });
   // Benches: legs + seat + back.
-  for (const [x, z, ry] of BENCHES) {
+  for (const [x, z, ry, by = 0] of BENCHES) {
     const g = new THREE.Group();
-    g.position.set(x, 0, z);
+    g.position.set(x, by, z);
     g.rotation.y = ry;
     part(GEO.box, darkWood, 0.12, 0.45, 0.4, -0.6, 0.225, 0, 0, 0, 0, g);
     part(GEO.box, darkWood, 0.12, 0.45, 0.4, 0.6, 0.225, 0, 0, 0, 0, g);
@@ -861,6 +893,13 @@ function buildProps(scene) {
       const fm = M(COL_CLOTH[1]);
       part(GEO.cone6, fm, 0.25, 0.7, 0.11, 0.05, 1.45, 0, 0, 0, -Math.PI / 2, g);
       part(GEO.cone6, fm, 0.15, 0.3, 0.07, -0.4, 1.45, 0, 0, 0, Math.PI / 2, g);
+    } else if (kind === 'sword') {
+      // Sword pictogram: vertical blade + guard + grip, steel and wood.
+      const steel = M(0xb9c1c7, 0.5);
+      part(GEO.box, steel, 0.12, 0.7, 0.04, 0, 1.3, 0, 0, 0, 0, g);
+      part(GEO.cone4, steel, 0.12, 0.14, 0.04, 0, 0.88, 0, Math.PI, 0, 0, g);
+      part(GEO.box, darkWood, 0.34, 0.08, 0.06, 0, 1.68, 0, 0, 0, 0, g);
+      part(GEO.cyl8, darkWood, 0.05, 0.22, 0.05, 0, 1.82, 0, 0, 0, 0, g);
     } else {
       part(GEO.box, wood, 0.7, 0.2, 0.25, 0, 1.35, 0, 0, 0, 0, g);
       part(GEO.cyl8, darkWood, 0.06, 0.5, 0.06, 0, 1.6, 0, 0, 0, 0, g);
@@ -883,25 +922,57 @@ function buildProps(scene) {
 function buildSeaside(scene) {
   const wood = M(COL_BRIDGE);
   const darkWood = M(COL_WOOD_DARK);
-  // Pier: plank deck on the dune gap + railed walkway toward the sea.
+  // Pier: plank deck through the dune gap, posts down into the water, railings
+  // on both sides (there is no ground below), and a wider end platform with a
+  // crate + barrel cluster (props) and a draped net.
   const [x0, x1, z, w, topY] = PIER;
+  const [platX, platZ, platS] = PIER_PLATFORM;
   const len = Math.abs(x1 - x0);
   const cx = (x0 + x1) / 2;
   for (let i = 0; i < 5; i++) {
     const px = x0 - 0.5 - i * 1.0;
     part(GEO.box, wood, 0.95, 0.08, w, px, topY - 0.04, z, 0, 0, 0, scene);
   }
-  for (const sz of [-w / 2 + 0.08, w / 2 - 0.08]) {
-    for (let i = 0; i < 5; i++) {
-      const px = x0 - 0.3 - i * 1.1;
-      part(GEO.box, darkWood, 0.09, 1.0, 0.09, px, 0.5, z + sz, 0, 0, 0, scene);
-    }
-    part(GEO.box, darkWood, len + 0.2, 0.08, 0.1, cx, 1.0, z + sz, 0, 0, 0, scene);
+  for (let i = 0; i < 3; i++) {
+    const px = platX - platS / 2 + 0.4 + i * ((platS - 0.8) / 2);
+    part(GEO.box, wood, 0.8, 0.08, platS, px, topY - 0.04, platZ, 0, 0, 0, scene);
   }
-  part(GEO.box, darkWood, 0.1, 0.08, w, Math.min(x0, x1), 1.0, z, 0, 0, 0, scene);
+  function railing(xa, xb, zr) {
+    const rl = Math.abs(xb - xa);
+    const rcx = (xa + xb) / 2;
+    const n = Math.max(2, Math.round(rl / 1.1) + 1);
+    for (let i = 0; i < n; i++) {
+      const px = xa + ((xb - xa) * i) / (n - 1);
+      part(GEO.box, darkWood, 0.09, 1.0, 0.09, px, topY + 0.5, zr, 0, 0, 0, scene);
+    }
+    part(GEO.box, darkWood, rl + 0.1, 0.08, 0.1, rcx, topY + 1.0, zr, 0, 0, 0, scene);
+  }
+  railing(x0, x1, z - w / 2 + 0.08);
+  railing(x0, x1, z + w / 2 - 0.08);
+  railing(platX - platS / 2, platX + platS / 2, platZ - platS / 2 + 0.08);
+  railing(platX - platS / 2, platX + platS / 2, platZ + platS / 2 - 0.08);
+  part(GEO.box, darkWood, 0.1, 0.08, platS, platX - platS / 2, topY + 1.0, platZ, 0, 0, 0, scene);
+  // Support posts from the deck down past the sea surface.
+  for (const [px, pz] of [
+    [-53, 4.3],
+    [-53, 5.7],
+    [-56.5, 4.3],
+    [-56.5, 5.7],
+    [-58.5, 4.0],
+    [-58.5, 6.0],
+  ]) {
+    part(GEO.cyl8, darkWood, 0.18, 1.6, 0.18, px, topY - 0.75, pz, 0, 0, 0, scene);
+  }
+  // Draped net on the platform's south rail.
+  const net = new THREE.Mesh(GEO.plane, new THREE.MeshStandardMaterial({
+    color: COL_NET, roughness: 1, metalness: 0, side: THREE.DoubleSide,
+  }));
+  net.scale.set(platS * 0.7, 0.7, 1);
+  net.position.set(platX, topY + 0.55, platZ + platS / 2 - 0.02);
+  scene.add(net);
   // Beached boat: hull + angled bow/stern + mast + furled sail.
   const g = new THREE.Group();
-  g.position.set(BOAT[0], 0, BOAT[1]);
+  g.position.set(BOAT[0], BOAT[3] || 0, BOAT[1]);
   g.rotation.y = BOAT[2];
   part(GEO.box, wood, 2.2, 0.5, 1.0, 0, 0.35, 0, 0, 0, 0, g);
   part(GEO.box, wood, 0.5, 0.35, 0.7, 1.15, 0.45, 0, 0, 0, -0.5, g);
@@ -910,8 +981,222 @@ function buildSeaside(scene) {
   part(GEO.box, M(COL_CLOTH[0]), 0.9, 0.4, 0.08, 0, 1.5, 0, 0, 0, 0, g);
   scene.add(g);
   // Coiled rope by the pier.
-  const rope = part(GEO.torus, wood, 1, 1, 1, ROPE[0], 0.09, ROPE[1], -Math.PI / 2, 0, 0, scene);
+  const rope = part(GEO.torus, wood, 1, 1, 1, ROPE[0], (ROPE[2] || 0) + 0.09, ROPE[1], -Math.PI / 2, 0, 0, scene);
   rope.castShadow = false;
+}
+
+// Terraced shelves: grassy tops with rock-strata cliff faces (one box, two
+// materials). Transforms mirror the physics shelf bodies exactly.
+function buildShelves(scene) {
+  const sideMat = M(COL_STRATA);
+  BEACH_SHELVES.forEach(([x0, x1, top], i) => {
+    const sx = x1 - x0;
+    const sy = top - BEACH_BASE_Y;
+    const topMat = M(COL_SHELF_TOP[i]);
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(sx, sy, 40),
+      [sideMat, sideMat, topMat, sideMat, sideMat, sideMat]
+    );
+    m.position.set((x0 + x1) / 2, (top + BEACH_BASE_Y) / 2, 0);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    scene.add(m);
+  });
+}
+
+// Beach ramps: inclined dirt slabs with side posts. Same math as physics.
+function buildBeachRamps(scene) {
+  const mat = M(COL_RAMP);
+  const postMat = M(COL_WOOD_DARK);
+  for (const [xE, xW, zC, w, tE, tW] of BEACH_RAMPS) {
+    const run = xE - xW;
+    const drop = tE - tW;
+    const len = Math.hypot(run, drop);
+    const ang = Math.atan2(drop, run);
+    const topC = (tE + tW) / 2;
+    const cx = (xE + xW) / 2;
+    const cy = topC - (BEACH_RAMP_THICK / 2) * Math.cos(ang);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, BEACH_RAMP_THICK, w), mat);
+    m.position.set(cx, cy, zC);
+    m.rotation.z = ang;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    scene.add(m);
+    // Side posts following the slope (visual).
+    const surfY = (x) => topC + ((x - cx) / (run / 2)) * (drop / 2);
+    for (const sz of [-w / 2 + 0.2, w / 2 - 0.2]) {
+      for (const t of [0.15, 0.5, 0.85]) {
+        const px = xW + run * t;
+        part(GEO.box, postMat, 0.12, 0.7, 0.12, px, surfY(px) + 0.3, zC + sz, 0, 0, 0, scene);
+      }
+    }
+  }
+}
+
+function buildParapets(scene) {
+  const mat = M(COL_STRATA);
+  for (const [edgeX, z0, z1, baseY] of BEACH_PARAPETS) {
+    part(GEO.box, mat, BEACH_PARAPET_T, BEACH_PARAPET_H, z1 - z0,
+      edgeX + BEACH_PARAPET_T / 2, baseY + BEACH_PARAPET_H / 2, (z0 + z1) / 2,
+      0, 0, 0, scene);
+  }
+}
+
+// Cairns: stacked-stone way-down markers at every ramp top.
+function buildCairns(scene) {
+  const mat = M(COL_STONE);
+  for (const [x, z, baseY] of BEACH_CAIRNS) {
+    part(GEO.dodec, mat, 0.64, 0.4, 0.64, x, baseY + 0.2, z, 0, x, 0, scene);
+    part(GEO.dodec, mat, 0.48, 0.32, 0.48, x, baseY + 0.52, z, 0, z, 0, scene);
+    part(GEO.dodec, mat, 0.34, 0.26, 0.34, x, baseY + 0.78, z, 0, x * 2, 0, scene);
+    part(GEO.dodec, mat, 0.2, 0.18, 0.2, x, baseY + 0.98, z, 0, 0, 0, scene);
+  }
+}
+
+function buildStones(scene) {
+  const mat = M(COL_ROCK);
+  for (const [x, z, baseY, h] of BEACH_STONES) {
+    // Axis-aligned: the visual must match the physics box core.
+    part(GEO.box, mat, 0.7, h, 0.5, x, baseY + h / 2, z, 0, 0, 0, scene);
+  }
+}
+
+// Permanent weapon pedestals: the sword's in its cove, the hammer's in the
+// forest. Only the weapon despawns on pickup; the stone stays.
+function buildPedestals(scene) {
+  for (const [x, z, baseY] of [
+    [SWORD_COVE[0], SWORD_COVE[1], BEACH_BASE_Y],
+    [HAMMER_PEDESTAL[0], HAMMER_PEDESTAL[1], 0],
+  ]) {
+    part(GEO.cyl10, M(COL_STONE), 0.9, 0.35, 0.9, x, baseY + 0.175, z, 0, 0, 0, scene);
+    part(GEO.cyl10, M(COL_ARCH), 1.0, 0.08, 1.0, x, baseY + 0.39, z, 0, 0, 0, scene);
+  }
+}
+
+function grassTuft(scene, mat, x, baseY, z) {
+  for (const tilt of [-0.25, 0, 0.25]) {
+    flatPart(GEO.cone6, mat, 0.18, 0.5, 0.18, x + tilt * 0.4, baseY + 0.22, z, 0, scene)
+      .rotation.z = tilt;
+  }
+}
+
+// Shelf-top grass (seeded scatter, kept off ramps/parapets/props) plus dune
+// crests, bushes, and the full beach-proper dressing: wet band, foam, sand
+// patches, driftwood, seaweed, tide pools, shells. All visual-only.
+function buildBeachDressing(scene) {
+  const rng = mulberry32(BEACH_TUFT_SEED);
+  const tuftMats = [M(COL_BUSH[0]), M(COL_BUSH[2]), M(COL_PATCH_SAND)];
+  // Blocked rects per shelf [x0, x1, z0, z1]: ramp corridors + drop/gap lips.
+  const blockedRects = [
+    [
+      [-30, -27.5, -17, -11], // R01 top corridor
+      [-30, -27.5, 6, 10], // D1 drop lip
+    ],
+    [
+      [-34, -30, -16.5, -11.5], // R01 bottom corridor
+      [-38, -36, 11.5, 16.5], // R12 top corridor
+      [-39, -37, -10, -6], // D2 drop lip
+    ],
+    [
+      [-42, -38, 11.5, 16.5], // R12 bottom corridor
+      [-46, -44, 11.5, 16.5], // gentle top corridor
+      [-46, -44.5, -4, 0], // steep top corridor
+    ],
+  ];
+  const avoid = [
+    ...ROCKS.map(([x, z]) => [x, z, 1.6]),
+    ...BEACH_STONES.map(([x, z]) => [x, z, 1.6]),
+    ...BEACH_CAIRNS.map(([x, z]) => [x, z, 1.1]),
+    [-22, 4.5, 1.2], // sword sign
+  ];
+  BEACH_SHELVES.forEach(([x0, x1, top], si) => {
+    let placed = 0;
+    for (let tries = 0; tries < 120 && placed < BEACH_TUFTS_PER_SHELF[si]; tries++) {
+      const x = x0 + 1.2 + rng() * (x1 - x0 - 2.4);
+      const z = -18 + rng() * 36;
+      if (x0 + 1.2 >= x1 - 1.2) break;
+      let bad = false;
+      for (const [bx0, bx1, bz0, bz1] of blockedRects[si]) {
+        if (x >= bx0 && x <= bx1 && z >= bz0 && z <= bz1) {
+          bad = true;
+          break;
+        }
+      }
+      if (!bad) {
+        for (const [ax, az, ar] of avoid) {
+          if (Math.hypot(x - ax, z - az) < ar) {
+            bad = true;
+            break;
+          }
+        }
+      }
+      if (bad) continue;
+      placed++;
+      grassTuft(scene, tuftMats[Math.floor(rng() * 3)], x, top, z);
+    }
+  });
+  for (const [x, z, baseY] of DUNE_GRASS) {
+    grassTuft(scene, tuftMats[1], x, baseY, z);
+  }
+  SHELF_BUSHES.forEach(([x, z, baseY, r], i) => {
+    part(GEO.ico, M(COL_BUSH[i % 3]), r * 2, r * 1.5, r * 2, x, baseY + r, z, 0, i, 0, scene);
+  });
+
+  const B = BEACH_BASE_Y;
+  // Wet-sand band along the waterline + a thin static foam edge.
+  flatStrip(scene, -51, 0, 2, 40, B + 0.01, COL_SHORE);
+  flatStrip(scene, -51.8, 0, 0.5, 36, B + 0.06, COL_FOAM);
+  // Sand patches.
+  for (const [x, z, r, tone] of SAND_PATCHES) {
+    flatPart(GEO.cyl10, M(tone === 0 ? COL_SAND_PALE : COL_SAND_DARK),
+      r * 2, 0.03, r * 2, x, B + 0.015, z, x * 1.7, scene);
+  }
+  // Driftwood: single logs or two angled segments.
+  const dwMat = M(COL_DRIFTWOOD);
+  for (const [x, z, ry, len, twoSeg] of DRIFTWOOD) {
+    const g = new THREE.Group();
+    g.position.set(x, B + 0.14, z);
+    g.rotation.y = ry;
+    part(GEO.cyl8, dwMat, 0.28, len, 0.28, twoSeg ? -len / 4 : 0, 0, 0, 0, 0, Math.PI / 2, g);
+    if (twoSeg) {
+      part(GEO.cyl8, dwMat, 0.24, len * 0.7, 0.24, len / 4, 0.02, len / 5, 0, 0.5, Math.PI / 2, g);
+    }
+    g.traverse((o) => {
+      if (o.isMesh) o.castShadow = false;
+    });
+    scene.add(g);
+  }
+  // Seaweed strips near the waterline.
+  for (const [x, z, ry] of SEAWEED) {
+    flatPart(GEO.box, M(COL_SEAWEED), 1.2, 0.03, 0.25, x, B + 0.03, z, ry, scene);
+  }
+  // Tide pools in rock hollows.
+  const poolMat = new THREE.MeshStandardMaterial({
+    color: COL_TIDE_POOL, roughness: 0.5, metalness: 0, flatShading: true,
+  });
+  const rimMat = M(COL_ROCK);
+  TIDE_POOLS.forEach(([x, z, r], pi) => {
+    const pool = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.04, 14), poolMat);
+    pool.position.set(x, B + 0.03, z);
+    pool.receiveShadow = true;
+    scene.add(pool);
+    for (let i = 0; i < 3; i++) {
+      const a = pi * 2.1 + (i / 3) * Math.PI * 2;
+      const rr = 0.15 + ((pi + i) % 3) * 0.05;
+      flatPart(GEO.dodec, rimMat, rr * 2, rr, rr * 2,
+        x + Math.cos(a) * (r + 0.15), B + rr * 0.4, z + Math.sin(a) * (r + 0.15), a, scene);
+    }
+  });
+  // Shells and pebbles, denser near the shore.
+  const srng = mulberry32(BEACH_SHELL_SEED);
+  for (let i = 0; i < BEACH_SHELL_COUNT; i++) {
+    const x = -52 + 5.5 * srng() * srng() + 0.2;
+    const z = -18 + srng() * 36;
+    const r = 0.05 + srng() * 0.04;
+    const mat = M(COL_SHELL[Math.floor(srng() * 3)]);
+    const geo = srng() < 0.5 ? GEO.ico : GEO.cone6;
+    flatPart(geo, mat, r * 2, r * 1.4, r * 2, x, B + r * 0.6, z, srng() * 3, scene);
+  }
 }
 
 function buildSky(scene) {
@@ -947,7 +1232,7 @@ function buildSky(scene) {
 
 export function buildLevel(scene) {
   slab(scene, ZONE_VILLAGE, COL_VILLAGE_GROUND);
-  slab(scene, ZONE_BEACH, COL_BEACH_GROUND);
+  slab(scene, BEACH_SLAB, COL_BEACH_GROUND, BEACH_BASE_Y);
   slab(scene, ZONE_FOREST, COL_FOREST_GROUND);
   slab(scene, ZONE_PASS, COL_PASS_GROUND);
   slab(scene, ZONE_ARENA, COL_ARENA_GROUND);
@@ -969,6 +1254,13 @@ export function buildLevel(scene) {
   buildProps(scene);
   buildSeaside(scene);
   buildArch(scene);
+  buildShelves(scene);
+  buildBeachRamps(scene);
+  buildParapets(scene);
+  buildCairns(scene);
+  buildStones(scene);
+  buildPedestals(scene);
+  buildBeachDressing(scene);
   const { lavaMats } = buildLava(scene);
   buildShafts(scene);
   buildFarSilhouettes(scene);

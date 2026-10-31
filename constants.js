@@ -65,11 +65,12 @@ export const SHORE_X = -52;
 // Boundary walls. [cx, cy, cz, sx, sy, sz, style]
 // Styles: fence (village), dune (beach), treeline (forest), rock (pass/arena).
 export const WALLS = [
-  // Beach: north, south, and a low dune ridge along the shore with a pier gap (z 4..6).
-  [-40, 1, -20.5, 42, 2, 1, 'dune'],
-  [-40, 1, 20.5, 42, 2, 1, 'dune'],
-  [SHORE_X, 0.6, -9, 1, 1.2, 24, 'dune'],
-  [SHORE_X, 0.6, 14, 1, 1.2, 14, 'dune'],
+  // Beach: tall north/south walls spanning all shelf levels (y -6..2), and a
+  // low dune ridge along the shore with a pier gap (z 4..6).
+  [-40, -2, -20.5, 42, 8, 1, 'dune'],
+  [-40, -2, 20.5, 42, 8, 1, 'dune'],
+  [SHORE_X, -5.4, -8.5, 1, 1.2, 25, 'dune'],
+  [SHORE_X, -5.4, 13.5, 1, 1.2, 15, 'dune'],
   // Village: south + east segments (pass opening z in [-6,6]).
   [0, 1, 20.5, 42, 2, 1, 'fence'],
   [20.5, 1, -13.25, 1, 2, 14.5, 'fence'],
@@ -90,9 +91,10 @@ export const WALLS = [
 ];
 
 // Hills: buried spheres the player rolls over. [cx, cy, cz, radius]
+// Beach dunes sit on the lowered beach (base y -6); crests stay ~1.5 above it.
 export const HILLS = [
-  [-38, -7.5, 6, 9], // beach east (crest y 1.5)
-  [-47, -8, -8, 10], // beach west (crest y 2)
+  [-50, -11.5, -13, 7], // beach north dune (crest y -4.5)
+  [-51.5, -10.5, 18.5, 6], // beach south dune (crest y -4.5)
   [8, -7.5, -38, 9], // forest east (crest y 1.5)
   [-8, -8, -48, 10], // forest west (crest y 2)
 ];
@@ -127,19 +129,26 @@ export const TREES = [
 ];
 export const TRUNK_RADIUS = 0.35;
 
-// Rocks: [x, z, size]. Beach zone only. Squashed dodecahedrons.
+// Rocks: [x, z, size, groundY]. Squashed dodecahedrons.
+// Shelf-top bumpers, sword-cove frame (open east), ramp-bottom framers,
+// beach obstacles, and sea rocks beyond the ridge (seen, not reached).
 export const ROCKS = [
-  [-28, 9, 1.6],
-  [-34, -10, 2.0],
-  [-44, 11, 1.4],
-  [-50, -3, 1.2],
-  [-30, -14, 1.8],
-  [-40, -6, 1.5],
-  [-26, -6, 1.1],
-  [-46, -14, 1.7],
-  // Shore rocks beyond the dune ridge (seen, not reached).
-  [-58, 8, 1.3],
-  [-59, -2, 1.0],
+  [-23, -8, 1.3, 0], // S0 bumper
+  [-27, 10, 1.1, 0], // S0 bumper
+  [-32, 0, 1.4, -2.2], // S1 bumper
+  [-40, 7, 1.3, -4.4], // S2 bumper
+  [-49, 5.5, 1.4, -6], // cove north
+  [-49, 0.5, 1.4, -6], // cove south
+  [-51, 3, 1.2, -6], // cove west
+  [-50.5, 4.5, 1.0, -6], // cove NW
+  [-50.5, 1.5, 1.0, -6], // cove SW
+  [-47.5, 12.5, 1.2, -6], // gentle-ramp framer
+  [-48, 16.8, 1.3, -6], // gentle-ramp framer
+  [-49, -4.5, 1.1, -6], // steep-ramp framer
+  [-47, -7, 1.2, -6], // north beach
+  [-51, 6.5, 1.0, -6], // pier-base rock
+  [-58, 8, 1.3, -6.5], // sea rock
+  [-59, -2, 1.0, -6.5], // sea rock
 ];
 
 // Huts: [x, z, rotY, bodyTone, roofTone, bodyH, roofKind].
@@ -179,7 +188,7 @@ export const SPURS = [
 ];
 
 // Village props with colliders. All clear of roads, spurs, plaza, sightlines.
-// Crates: [x, z, rotY, size, dy] (dy stacks on another crate).
+// Crates: [x, z, rotY, size, dy, baseY] (dy stacks on another crate).
 export const CRATES = [
   [-9.7, 13.8, 0.2, 0.8, 0],
   [-9.7, 13.8, 0.35, 0.7, 0.8],
@@ -187,31 +196,34 @@ export const CRATES = [
   [9.7, 13.8, 0.1, 0.7, 0.8],
   [-18.5, -8, 0.4, 0.9, 0],
   [16.5, -13.5, -0.3, 0.85, 0],
-  [-50.5, 7.8, 0.2, 0.8, 0],
-  [-50.5, 6.9, -0.1, 0.75, 0],
+  [-49.5, 7.8, 0.2, 0.8, 0, -6], // beach, by the boat
+  [-49.5, 6.9, -0.1, 0.75, 0, -6], // beach, by the boat
+  [-57.5, 4.2, 0.1, 0.7, 0, -5.7], // pier-end platform
 ];
-// Barrels: [x, z]. r 0.35, h 0.9.
+// Barrels: [x, z, baseY]. r 0.35, h 0.9.
 export const BARRELS = [
   [-16.5, 12],
   [-16.5, 13],
   [16.5, 12],
   [16.5, 13],
-  [-49, 7.6],
-  [-48.2, 7.9],
+  [-49, 7.6, -6],
+  [-48.2, 7.9, -6],
+  [-57.5, 5.9, -5.7], // pier-end platform
 ];
-// Fence runs: [x1, z1, x2, z2] (posts + two rails + net on the shore run).
+// Fence runs: [x1, z1, x2, z2, baseY] (posts + two rails + net on the shore run).
+// The shore run is short on purpose: it must leave passable gaps at both ends.
 export const FENCES = [
   [-8.6, -9.5, -8.6, -13.5], // H3 garden
   [2.2, -6, 2.2, -12], // north road edging
-  [-49, 9, -45, 9], // shore run with draped net
+  [-50, 11, -48, 11, -6], // shore run with draped net
   [14, 2.5, 14, 6.5], // H6 garden
   [2, 12.3, 6, 12.3], // channel bank
 ];
-// Benches: [x, z, rotY]. Plaza bench sits off-axis so it never blocks the spawn view.
+// Benches: [x, z, rotY, baseY]. Plaza bench sits off-axis so it never blocks the spawn view.
 export const BENCHES = [
   [-3.5, 6.8, 0.15],
   [-7.5, 2.5, 0.3],
-  [-47, 6.5, 1.57],
+  [-47, -8, 1.57, -6], // north beach rest spot
 ];
 // Lantern posts: [x, z].
 export const LANTERNS = [
@@ -229,6 +241,7 @@ export const CART = [8.5, -15.5, 0.3];
 export const SIGNS = [
   [-17, 2.8, 1.57, 'fish'],
   [2.8, -17, -0.1, 'boat'],
+  [-22, 4.5, 1.57, 'sword'], // beach gate: the sword is that way
 ];
 // Big bushes with colliders: [x, z, r].
 export const BUSH_BIG = [
@@ -268,17 +281,20 @@ export const GATES = [
   [-20, 0, 1.57, 3.0, 2.2],
   [0, -20, 0, 3.4, 2.0],
 ];
-// Beached boat [x, z, rotY] and rope coil [x, z].
-// Flat sand near the pier: clear of hill2, road, sword, and dune ridge.
-export const BOAT = [-50, 2.8, 0];
-export const ROPE = [-51.5, 6.3];
+// Beached boat [x, z, rotY, baseY] and rope coil [x, z, baseY].
+// On the lowered beach south of the sword cove; leaves 1.6 gaps each side.
+export const BOAT = [-49, 8.5, 0.15, -6];
+export const ROPE = [-51.5, 6.3, -6];
 // Pier: deck from the dune gap toward the sea. [x0, x1, z, width, topY].
-export const PIER = [-52, -57, 5, 1.6, 0.12];
+// Deck top sits 0.3 above the beach; the sea surface is 0.8 below the deck.
+export const PIER = [-52, -57, 5, 1.6, -5.7];
+// Pier-end platform: [cx, cz, size]. Deck top, wider than the walkway.
+export const PIER_PLATFORM = [-57.5, 5, 2.5];
 // Gulls: [cx, h, cz, r, speed]. Clouds: [x, y, z, s].
 export const GULLS = [
-  [-55, 9, -2, 5, 0.25],
-  [-58, 11, 4, 6, 0.2],
-  [-52, 10, -6, 4, 0.3],
+  [-55, 3.5, -2, 5, 0.25],
+  [-58, 5, 4, 6, 0.2],
+  [-52, 4.2, -6, 4, 0.3],
 ];
 export const CLOUDS = [
   [-10, 26, -5, 4],
@@ -307,10 +323,113 @@ export const ARCH = { x: 22, pillarGap: 3, pillarSize: 1.2, pillarH: 3, lintelH:
 // Weapon pickups: [id, x, baseY, z].
 export const PICKUPS = [
   ['dagger', 0, 0.8, 0],
-  ['sword', -49, 0.8, 3],
+  ['sword', -49, -5.2, 3], // floats over its cove pedestal (beach base -6)
   ['hammer', -11, 1.0, -53],
 ];
 export const PICKUP_TOUCH_DIST = 1.5;
+
+// Beach terraces (issue #6): layered shelves stepping down east -> west.
+// S0 top is flush with the village (y 0); the beach proper sits at -6;
+// west of x -52 there is no ground, only the sea (visual).
+export const BEACH_BASE_Y = -6;
+export const BEACH_SLAB = { x0: -52, x1: -20, z0: -20, z1: 20 };
+export const SEA_TOP_Y = -6.5;
+// Shelves: [x0, x1, topY]. Full beach width in z (z -20..20).
+export const BEACH_SHELVES = [
+  [-30, -20, 0], // S0 entry terrace
+  [-38, -30, -2.2], // S1
+  [-46, -38, -4.4], // S2 fork shelf
+];
+// Ramps: [xEast, xWest, zCenter, width, topEast, topWest].
+// R01 north, R12 south (switchbacks); the S2->beach fork splits gentle/steep.
+export const BEACH_RAMPS = [
+  [-28.5, -33.5, -14, 3.5, 0, -2.2], // R01 north switchback
+  [-36.5, -41.5, 14, 3.5, -2.2, -4.4], // R12 south switchback
+  [-44.5, -50.5, 14, 4.0, -4.4, -6], // gentle fork -> pier end
+  [-45.0, -48.0, -2, 2.5, -4.4, -6], // steep fork -> sword cove
+];
+export const BEACH_RAMP_THICK = 0.3;
+// Cliff-edge parapets: [edgeX, z0, z1, baseY]. Gaps at ramps and at the two
+// shortcut drops (S0->S1 z 6.5..9.5, S1->S2 z -9.5..-6.5).
+export const BEACH_PARAPETS = [
+  [-30, -20, -16.5, 0],
+  [-30, -11.5, 6.5, 0],
+  [-30, 9.5, 20, 0],
+  [-38, -20, -9.5, -2.2],
+  [-38, -6.5, 11.5, -2.2],
+  [-38, 16.5, 20, -2.2],
+  [-46, -20, -3.75, -4.4],
+  [-46, -0.25, 11.5, -4.4],
+  [-46, 16.5, 20, -4.4],
+];
+export const BEACH_PARAPET_H = 1.0;
+export const BEACH_PARAPET_T = 0.6;
+// Cairns (way down markers): [x, z, baseY]. The steep fork gets two.
+export const BEACH_CAIRNS = [
+  [-28.5, -16.8, 0],
+  [-36.5, 16.8, -2.2],
+  [-44.5, 16.8, -4.4],
+  [-44.5, -4.5, -4.4],
+  [-44.5, 0.5, -4.4],
+];
+// Standing stones: [x, z, baseY, h]. Distant landmarks, clear of the route.
+export const BEACH_STONES = [
+  [-24, 16, 0, 3.0],
+  [-31, 16, -2.2, 2.6],
+  [-39, -17, -4.4, 2.8],
+];
+// Sword cove [x, z] on the beach base; hammer pedestal [x, z] on y 0.
+// Both pedestals are permanent world geometry (only weapons despawn).
+export const SWORD_COVE = [-49, 3];
+export const HAMMER_PEDESTAL = [-11, -53];
+// Tide pools: [x, z, r]. Beach level, visual-only.
+export const TIDE_POOLS = [
+  [-50, -6, 0.9],
+  [-50.8, 9.5, 0.8],
+];
+// Driftwood: [x, z, rotY, len, twoSeg]. Visual-only.
+export const DRIFTWOOD = [
+  [-46.5, 10, 0.4, 2.0, false],
+  [-49.5, 12.5, -0.3, 1.6, true],
+  [-47.5, -5, 0.9, 1.8, false],
+  [-51, -2, 0.2, 2.2, true],
+  [-49, -9, -0.7, 1.5, false],
+];
+// Seaweed strips: [x, z, rotY]. Visual-only.
+export const SEAWEED = [
+  [-51.3, -8, 0.3],
+  [-51.3, -3, -0.2],
+  [-51.5, 7.5, 0.5],
+  [-51.3, 11, 0.1],
+];
+// Sand patches: [x, z, r, tone]. tone 0 pale, 1 dark. Visual-only.
+export const SAND_PATCHES = [
+  [-48, -9, 1.5, 0],
+  [-48.5, 5, 1.2, 1],
+  [-49.5, 11, 1.2, 0],
+];
+// Shelf bushes (visual): [x, z, baseY, r].
+export const SHELF_BUSHES = [
+  [-21.5, -18, 0, 0.45],
+  [-21.5, 18, 0, 0.4],
+  [-31, -18, -2.2, 0.45],
+  [-37, 17.5, -2.2, 0.4],
+  [-39, -18, -4.4, 0.45],
+  [-39, 18, -4.4, 0.4],
+];
+// Dune-crest grass: [x, z, baseY].
+export const DUNE_GRASS = [
+  [-50.5, -13.5, -4.5],
+  [-49.5, -12.5, -4.5],
+  [-50, -12, -4.5],
+  [-51, 18, -4.5],
+  [-50.8, 19, -4.5],
+  [-50.5, 18.2, -4.5],
+];
+export const BEACH_SHELL_COUNT = 40;
+export const BEACH_SHELL_SEED = 21;
+export const BEACH_TUFT_SEED = 22;
+export const BEACH_TUFTS_PER_SHELF = [10, 8, 6];
 
 // Attached-weapon anchors on the cube (visual offsets; colliders match).
 export const ANCHOR = {
@@ -380,3 +499,14 @@ export const COL_BRIDGE = 0x8a7154;
 export const COL_LAVA = 0xff2200;
 export const COL_PLAYER = 0xe8873a;
 export const COL_EYE = 0x1c1a18;
+// Beach terrace palette: grassy tops stepping down to sand, rock strata faces.
+export const COL_SHELF_TOP = [0x8f9a68, 0x9aa06e, 0xb0a179];
+export const COL_STRATA = 0x7a6a55;
+export const COL_RAMP = 0xa08b66;
+export const COL_DRIFTWOOD = 0x7a6a58;
+export const COL_SEAWEED = 0x3d5a3a;
+export const COL_TIDE_POOL = 0x5a8a9a;
+export const COL_FOAM = 0xf5f2e8;
+export const COL_SAND_PALE = 0xe0cfa5;
+export const COL_SAND_DARK = 0xc4b183;
+export const COL_SHELL = [0xe8e2d2, 0xd9b8b8, 0xb9b9b9];

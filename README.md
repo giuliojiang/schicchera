@@ -11,8 +11,10 @@ Cube character with a face, orbit-to-aim follow camera, charge-and-flick movemen
 (quadratic charge, additive velocity, speed clamp), ground/air drag switching,
 fixed-timestep physics, full hub-and-spoke world (village hub, beach, forest,
 mountain pass, boss arena), dressed village (7 huts, plaza, props, pier,
-gates), collectible weapons that attach with mass + colliders, per-zone fog,
-synthesized audio, `?debug=1` state bridge. No build step.
+gates), terraced beach (layered shelves, switchback ramps, gentle/steep fork,
+sword cove, shore dressing, pier), collectible weapons that attach with mass
++ colliders, per-zone fog, synthesized audio, `?debug=1` state bridge.
+No build step.
 
 ## Run it
 
@@ -29,4 +31,5 @@ Open http://127.0.0.1:8765/ in a browser.
 - **Space / Enter** — hold to charge, release to flick
 
 Debug hooks: `?debug=1` exposes `window.__GAME__` (snapshot, `step()`,
-`setSeed()`); `?autoplay&seed=N` runs a scripted input loop.
+`setSeed()`); `?autoplay&seed=N` runs a scripted input loop;
+`?at=x,z[,y]&orbit=rad` overrides the spawn for level inspection.
