@@ -10,7 +10,7 @@ Spec: [issue #1](https://github.com/giuliojiang/schicchera/issues/1)
 Cube character with a face, orbit-to-aim follow camera, charge-and-flick movement
 (quadratic charge, additive velocity, speed clamp), ground/air drag switching,
 fixed-timestep physics, full hub-and-spoke world (village hub, beach, forest,
-mountain pass, boss arena), dressed village (7 huts, plaza, props, pier,
+mountain pass, volcanic crater arena), dressed village (7 huts, plaza, props, pier,
 gates), terraced beach (layered shelves, switchback ramps, gentle/steep fork,
 sword cove, shore dressing, pier), navigable forest grove (thicket walls,
 4 clearings, winding paths, slalom shortcut, pond, lookout hill, giant tree,

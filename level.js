@@ -4,7 +4,30 @@ import * as THREE from 'three';
 import {
   ANCHOR,
   ARCH,
+  ARENA_APPROACH,
+  ARENA_APPROACH_SEED,
+  ARENA_BACKDROP_H,
+  ARENA_BACKDROP_R,
+  ARENA_BACKDROP_T,
+  ARENA_BORDER_IN,
+  ARENA_BORDER_OUT,
   ARENA_CENTER,
+  ARENA_CRACK_COUNT,
+  ARENA_DISC_R,
+  ARENA_GAP_HALF_WIDTH,
+  ARENA_GATE,
+  ARENA_LAVA_POOLS,
+  ARENA_MOAT_IN,
+  ARENA_MOAT_OUT,
+  ARENA_PILE_R,
+  ARENA_RIM_SEED,
+  ARENA_RING_H,
+  ARENA_RING_R,
+  ARENA_RING_SEGMENTS,
+  ARENA_RING_T,
+  ARENA_SEG_OVERLAP,
+  ARENA_SHAFTS,
+  ARENA_SPIRES,
   BARRELS,
   BEACH_BASE_Y,
   BEACH_CAIRNS,
@@ -32,7 +55,9 @@ import {
   CHANNEL_Z1,
   CLOUDS,
   COL_ARCH,
+  COL_ARENA_DISC,
   COL_ARENA_GROUND,
+  COL_ARENA_STRATA,
   COL_BEACH_GROUND,
   COL_BRIDGE,
   COL_BUSH,
@@ -42,6 +67,7 @@ import {
   COL_DIRT,
   COL_DOOR,
   COL_DRIFTWOOD,
+  COL_EMBER,
   COL_EYE,
   COL_FERN,
   COL_FIREFLY,
@@ -60,6 +86,9 @@ import {
   COL_MUSHROOM_CAP,
   COL_MUSHROOM_STEM,
   COL_NET,
+  COL_OBSIDIAN,
+  COL_OBSIDIAN_2,
+  COL_OBSIDIAN_3,
   COL_PASS_GROUND,
   COL_PATCH_GRASS,
   COL_PATCH_SAND,
@@ -78,6 +107,7 @@ import {
   COL_SHELF_TOP,
   COL_SHELL,
   COL_SHORE,
+  COL_SMOKE,
   COL_STONE,
   COL_STRATA,
   COL_STUMP_TOP,
@@ -95,6 +125,7 @@ import {
   DAGGER_MASS,
   DRIFTWOOD,
   DUNE_GRASS,
+  EMBER_COUNT,
   FENCES,
   FIREFLY_COUNT,
   FOREST_BRIDGE,
@@ -146,6 +177,7 @@ import {
   SHELF_BUSHES,
   SHORE_X,
   SIGNS,
+  SMOKE_COUNT,
   SPURS,
   STALL,
   SUN_COLOR,
@@ -163,7 +195,7 @@ import {
   ZONE_PASS,
   ZONE_VILLAGE,
 } from './constants.js';
-import { mulberry32 } from './game.js';
+import { arenaRingLayout, mulberry32 } from './game.js';
 
 function matte(color, extra = {}) {
   return new THREE.MeshStandardMaterial({
@@ -737,7 +769,7 @@ function buildWater(scene) {
 
 function buildLava(scene) {
   const lavaMats = [];
-  function lavaMesh(geo, x, y, z) {
+  function lavaMat() {
     const mat = new THREE.MeshStandardMaterial({
       color: 0x3a0a06,
       emissive: COL_LAVA,
@@ -747,19 +779,32 @@ function buildLava(scene) {
       flatShading: true,
     });
     lavaMats.push(mat);
-    const m = new THREE.Mesh(geo, mat);
+    return mat;
+  }
+  function lavaMesh(geo, x, y, z) {
+    const m = new THREE.Mesh(geo, lavaMat());
     m.position.set(x, y, z);
     scene.add(m);
   }
-  // Edge strips along the arena's north/south walls (off the fighting floor).
-  const strip = new THREE.BoxGeometry(24, 0.08, 2.5);
-  lavaMesh(strip, ARENA_CENTER[0], 0.06, -11.75);
-  lavaMesh(strip.clone(), ARENA_CENTER[0], 0.06, 11.75);
-  // Corner pools at the arena's east edge.
-  const pool = new THREE.CylinderGeometry(2, 2, 0.08, 12);
-  lavaMesh(pool, 70, 0.06, -12);
-  lavaMesh(pool.clone(), 70, 0.06, 12);
-  // Thin seams along the pass walls.
+  // Lava moat: a flat emissive annulus circling the fighting disc, between
+  // the ring border and the rim piles. Visual-only; the player rolls over it.
+  const moat = new THREE.Mesh(
+    new THREE.RingGeometry(ARENA_MOAT_IN, ARENA_MOAT_OUT, 64),
+    lavaMat()
+  );
+  moat.rotation.x = -Math.PI / 2;
+  moat.position.set(ARENA_CENTER[0], 0.05, ARENA_CENTER[1]);
+  moat.receiveShadow = true;
+  scene.add(moat);
+  // Lava pools tucked between rim piles. Clear of the disc, merged with the
+  // moat visually. Visual-only, like all lava.
+  for (const [x, z, r] of ARENA_LAVA_POOLS) {
+    const pool = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.08, 14), lavaMat());
+    pool.position.set(x, 0.06, z);
+    pool.receiveShadow = true;
+    scene.add(pool);
+  }
+  // Thin seams along the pass walls (the dread-building approach; kept dark).
   const seam = new THREE.BoxGeometry(20, 0.06, 0.8);
   lavaMesh(seam, 32, 0.05, -5.2);
   lavaMesh(seam.clone(), 32, 0.05, 5.2);
@@ -767,7 +812,7 @@ function buildLava(scene) {
 }
 
 function buildShafts(scene) {
-  function shaft(x, z, color, opacity) {
+  function shaft(x, z, color, opacity, rTop = 0.5, rBot = 1.8) {
     const mat = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -777,7 +822,7 @@ function buildShafts(scene) {
       side: THREE.DoubleSide,
       fog: false,
     });
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1.8, 9, 8, 1, true), mat);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, 9, 8, 1, true), mat);
     m.position.set(x, 4, z);
     m.rotation.z = 0.15;
     scene.add(m);
@@ -786,8 +831,287 @@ function buildShafts(scene) {
   for (const [x, z] of FOREST_SHAFTS) {
     shaft(x, z, COL_SHAFT_FOREST, FOREST_SHAFT_OPACITY);
   }
-  shaft(52, -6, COL_SHAFT_ARENA, 0.05);
-  shaft(56, 6, COL_SHAFT_ARENA, 0.05);
+  // Volcanic glow (issue #9): narrow red wisps off the lava pools and moat.
+  // Faint and red: additive blending over black lifts fast under sRGB output,
+  // so the old salmon at 0.05 read as solid brown columns; lava red at 0.02
+  // stays a dim red glow.
+  for (const [x, z] of ARENA_SHAFTS) {
+    shaft(x, z, COL_SHAFT_ARENA, 0.02, 0.35, 1.0);
+  }
+}
+
+// Crater floor (issue #9): a flat ash disc (the fighting floor) with a thin
+// lighter-stone ring border at its edge. Both visual-only; the physics ground
+// is the arena slab underneath.
+function buildArenaDisc(scene) {
+  const disc = new THREE.Mesh(
+    new THREE.CylinderGeometry(ARENA_DISC_R, ARENA_DISC_R, 0.06, 48),
+    M(COL_ARENA_DISC)
+  );
+  disc.position.set(ARENA_CENTER[0], 0.03, ARENA_CENTER[1]);
+  disc.receiveShadow = true;
+  scene.add(disc);
+  const border = new THREE.Mesh(
+    new THREE.RingGeometry(ARENA_BORDER_IN, ARENA_BORDER_OUT, 64),
+    M(COL_STONE)
+  );
+  border.rotation.x = -Math.PI / 2;
+  border.position.set(ARENA_CENTER[0], 0.065, ARENA_CENTER[1]);
+  border.receiveShadow = true;
+  scene.add(border);
+}
+
+// Crater ring (issue #9): collider-segment visuals from the shared layout
+// (exact match with physics.js) plus a taller visual-only backdrop row behind
+// the piles, so no sky shows through rim gaps. The west gap stays open.
+function buildArenaRing(scene) {
+  const ring = arenaRingLayout({
+    cx: ARENA_CENTER[0],
+    cz: ARENA_CENTER[1],
+    radius: ARENA_RING_R,
+    segments: ARENA_RING_SEGMENTS,
+    gapHalfWidth: ARENA_GAP_HALF_WIDTH,
+    segOverlap: ARENA_SEG_OVERLAP,
+  });
+  for (const s of ring.kept) {
+    part(GEO.box, M(COL_WALL_ROCK), s.len, ARENA_RING_H, ARENA_RING_T,
+      s.x, ARENA_RING_H / 2, s.z, 0, s.rotY, 0, scene);
+  }
+  const back = arenaRingLayout({
+    cx: ARENA_CENTER[0],
+    cz: ARENA_CENTER[1],
+    radius: ARENA_BACKDROP_R,
+    segments: ARENA_RING_SEGMENTS,
+    gapHalfWidth: ARENA_GAP_HALF_WIDTH,
+    segOverlap: ARENA_SEG_OVERLAP,
+  });
+  for (const s of back.kept) {
+    part(GEO.box, M(COL_OBSIDIAN), s.len, ARENA_BACKDROP_H, ARENA_BACKDROP_T,
+      s.x, ARENA_BACKDROP_H / 2, s.z, 0, s.rotY, 0, scene);
+  }
+}
+
+// One piled-rock cluster: a chained main spire (each rock sits on the one
+// below, so nothing floats) plus side branches. Dodecahedrons and squashed
+// boxes in obsidian tones. Returns the placed rocks [{x,y,z,s}].
+function rockPile(scene, rng, cx, cz, { count, chain, baseSize }) {
+  const tones = [M(COL_OBSIDIAN), M(COL_OBSIDIAN_2), M(COL_OBSIDIAN_3)];
+  const rocks = [];
+  function addRock(s, x, y, z) {
+    const tone = tones[Math.floor(rng() * tones.length)];
+    if (rng() < 0.6) {
+      part(GEO.dodec, tone, s * 0.55, s * 0.4, s * 0.55,
+        x, y, z, 0, rng() * Math.PI, 0, scene);
+    } else {
+      part(GEO.box, tone, s, s * 0.6, s * 0.8,
+        x, y, z, (rng() - 0.5) * 0.3, rng() * Math.PI, (rng() - 0.5) * 0.3, scene);
+    }
+    rocks.push({ x, y, z, s });
+  }
+  let px = cx;
+  let pz = cz;
+  let py = 0;
+  let ps = baseSize;
+  for (let j = 0; j < count; j++) {
+    if (j < chain) {
+      // Main spire: stack on the previous rock with a small jitter.
+      const s = j === 0 ? ps : Math.max(0.7, ps * (0.78 + rng() * 0.12));
+      const x = px + (j === 0 ? 0 : (rng() - 0.5) * 0.7);
+      const z = pz + (j === 0 ? 0 : (rng() - 0.5) * 0.7);
+      const y = j === 0 ? s * 0.32 : py + ps * 0.55;
+      addRock(s, x, y, z);
+      px = x;
+      pz = z;
+      py = y;
+      ps = s;
+    } else {
+      // Side branch: sit on a random earlier rock.
+      const parent = rocks[Math.floor(rng() * rocks.length)];
+      const s = Math.max(0.7, parent.s * (0.65 + rng() * 0.25));
+      addRock(s, parent.x + (rng() - 0.5) * 1.4, parent.y + parent.s * 0.45,
+        parent.z + (rng() - 0.5) * 1.4);
+    }
+  }
+  return rocks;
+}
+
+// The rim (issue #9): 14 piled-rock clusters around the ring (skipping the
+// gap), jagged heights, glowing cracks in a few rocks, strata bands on the
+// tallest piles. All visual dressing on the collider ring: no colliders here.
+function buildArenaRim(scene) {
+  const crackMat = new THREE.MeshStandardMaterial({
+    color: 0x3a0a06,
+    emissive: COL_LAVA,
+    emissiveIntensity: 1.2,
+    roughness: 1,
+    metalness: 0,
+    flatShading: true,
+  });
+  const rng = mulberry32(ARENA_RIM_SEED);
+  const candidates = [];
+  let pileIdx = 0;
+  for (let i = 0; i < 18; i++) {
+    const deg = 10 + i * 20;
+    const a = (deg * Math.PI) / 180;
+    const dGap = Math.abs(Math.atan2(Math.sin(a - Math.PI), Math.cos(a - Math.PI)));
+    if (dGap < (32 * Math.PI) / 180) continue; // keep the mouth clear
+    const r = ARENA_PILE_R + (rng() - 0.5) * 1.0;
+    const cx = ARENA_CENTER[0] + r * Math.cos(a);
+    const cz = ARENA_CENTER[1] + r * Math.sin(a);
+    const tall = pileIdx === 2 || pileIdx === 8 || pileIdx === 11;
+    const count = tall ? 6 + Math.floor(rng() * 3) : 3 + Math.floor(rng() * 4);
+    const rocks = rockPile(scene, rng, cx, cz, {
+      count,
+      chain: tall ? 6 : count >= 5 ? 4 : 3,
+      baseSize: (tall ? 2.0 : 1.9) + rng() * 0.4,
+    });
+    // Strata band on the tallest piles: a lighter horizontal box partway up.
+    if (tall) {
+      const topY = Math.max(...rocks.map((k) => k.y));
+      part(GEO.box, M(COL_ARENA_STRATA), 1.4, 0.18, 2.2,
+        cx, topY * 0.45, cz, 0, Math.PI / 2 - a, 0, scene);
+    }
+    // Crack candidate: a mid-stack rock with a face toward the arena.
+    const mid = rocks[1 + Math.floor(rng() * Math.max(1, rocks.length - 2))];
+    candidates.push({ rock: mid, angle: a });
+    pileIdx++;
+  }
+  // Glowing cracks: small emissive slits on a few pile rocks, facing the
+  // arena floor. One shared dimmer-than-lava material, pulsed in main.js.
+  const crng = mulberry32(ARENA_RIM_SEED + 7);
+  const order = candidates
+    .map((c, i) => [crng(), i])
+    .sort((p, q) => p[0] - q[0])
+    .slice(0, ARENA_CRACK_COUNT);
+  for (const [, i] of order) {
+    const { rock, angle: a } = candidates[i];
+    const h = 0.4 + crng() * 0.3;
+    const m = part(GEO.box, crackMat, 0.14, h, 0.3,
+      rock.x - Math.cos(a) * rock.s * 0.4, rock.y, rock.z - Math.sin(a) * rock.s * 0.4,
+      0, Math.PI / 2 - a, 0, scene);
+    m.castShadow = false;
+  }
+  return { crackMats: [crackMat] };
+}
+
+// Mouth gate (issue #9): obsidian pillars capping the ring ends + a cracked
+// two-piece lintel. Transforms match the physics colliders exactly.
+function buildArenaGate(scene) {
+  const { gapEdges } = arenaRingLayout({
+    cx: ARENA_CENTER[0],
+    cz: ARENA_CENTER[1],
+    radius: ARENA_RING_R,
+    segments: ARENA_RING_SEGMENTS,
+    gapHalfWidth: ARENA_GAP_HALF_WIDTH,
+    segOverlap: ARENA_SEG_OVERLAP,
+  });
+  const pw = ARENA_GATE.pillarW;
+  const ph = ARENA_GATE.pillarH;
+  const pillars = gapEdges.map((e) => [
+    ARENA_CENTER[0] + ARENA_RING_R * Math.cos(e),
+    ARENA_RING_R * Math.sin(e),
+  ]);
+  for (const [px, pz] of pillars) {
+    part(GEO.box, M(COL_OBSIDIAN_3), pw, ph, pw, px, ph / 2, pz, 0, 0, 0, scene);
+    part(GEO.box, M(COL_OBSIDIAN_2), pw + 0.5, 0.35, pw + 0.5,
+      px, ph + 0.17, pz, 0, 0, 0, scene); // cap stone (visual trim)
+  }
+  const gx = pillars[0][0];
+  const lh = ARENA_GATE.lintelH;
+  const lw = ARENA_GATE.lintelW;
+  const llen = ARENA_GATE.lintelLen;
+  part(GEO.box, M(COL_OBSIDIAN_3), lw, lh, llen,
+    gx, ph + lh / 2, -llen / 2 + 0.1, 0, 0, 0, scene);
+  part(GEO.box, M(COL_OBSIDIAN_2), lw, lh, llen,
+    gx + 0.3, ph + lh / 2 - 0.25, llen / 2 - 0.1, 0, 0, 0, scene);
+}
+
+// Volcanic spires (issue #9): the crater skyline. Twisted two-cone snags on
+// squat bases, behind the backdrop wall; bases hidden, tops rising into the
+// glow. The upper cone twists 45 degrees and leans off-axis, so facets catch
+// the light differently from every side instead of rendering one flat face.
+function buildArenaSpires(scene) {
+  ARENA_SPIRES.forEach(([x, z, h, w], i) => {
+    part(GEO.box, M(COL_OBSIDIAN), w * 1.6, 1.2, w * 1.6, x, 0.6, z, 0, i * 0.4, 0, scene);
+    part(GEO.cone4, M(COL_OBSIDIAN_3), w * 0.8, h * 0.55, w * 0.8,
+      x, 0.8 + h * 0.275, z, 0, i * 1.3 + 0.4, 0.04 * (i - 1), scene);
+    part(GEO.cone4, M(COL_OBSIDIAN_3), w * 0.55, h * 0.5, w * 0.55,
+      x + 0.3 * (i - 1), 0.8 + h * 0.55 - 0.5 + h * 0.25, z + 0.2 * i,
+      0.05 * i, i * 1.3 + 0.4 + Math.PI / 4, 0.08 * (i - 1), scene);
+  });
+}
+
+// Approach shoulders (issue #9): rock piles embedded in the corridor wall
+// line for the pass's last stretch, tops peeking above the walls. The walls'
+// colliders cover the embedded parts; the piles themselves are visual-only.
+function buildApproachPiles(scene) {
+  const rng = mulberry32(ARENA_APPROACH_SEED);
+  for (const [x, z] of ARENA_APPROACH) {
+    rockPile(scene, rng, x, z, { count: 4, chain: 4, baseSize: 1.7 + rng() * 0.4 });
+  }
+}
+
+// Soft round sprite so ember/smoke points read as glow/dust, not squares.
+function dotTexture() {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.5)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+}
+
+// Crater garnish (issue #9): ember motes drifting up off the lava ring and
+// pools, plus one smoke vent over a rim pool. Animated in main.js.
+function buildArenaParticles(scene) {
+  const rng = mulberry32(ARENA_RIM_SEED + 5);
+  const dot = dotTexture();
+  function cloud(count, color, size, opacity, additive, place) {
+    const pos = new Float32Array(count * 3);
+    const base = [];
+    for (let i = 0; i < count; i++) {
+      const [x, y, z] = place();
+      pos[i * 3] = x;
+      pos[i * 3 + 1] = y;
+      pos[i * 3 + 2] = z;
+      base.push([x, y, z, rng() * 2.2, 0.4 + rng() * 0.5, rng() * Math.PI * 2]);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({
+      color, size, transparent: true, opacity, map: dot,
+      sizeAttenuation: true, depthWrite: false,
+      ...(additive ? { blending: THREE.AdditiveBlending } : {}),
+    });
+    const points = new THREE.Points(geo, mat);
+    scene.add(points);
+    return { points, base };
+  }
+  // Embers: over the moat ring and inside the pool rims.
+  const { points: embers, base: emberBase } = cloud(
+    EMBER_COUNT, COL_EMBER, 0.22, 0.9, true, () => {
+      if (rng() < 0.6) {
+        const a = rng() * Math.PI * 2;
+        const r = ARENA_MOAT_IN + rng() * (ARENA_MOAT_OUT - ARENA_MOAT_IN);
+        return [ARENA_CENTER[0] + r * Math.cos(a), 0.2 + rng() * 1.3, ARENA_CENTER[1] + r * Math.sin(a)];
+      }
+      const [px, pz, pr] = ARENA_LAVA_POOLS[Math.floor(rng() * ARENA_LAVA_POOLS.length)];
+      const a = rng() * Math.PI * 2;
+      const r = rng() * pr * 0.8;
+      return [px + r * Math.cos(a), 0.2 + rng() * 1.0, pz + r * Math.sin(a)];
+    });
+  // Smoke: one soft vent over the first rim pool, slower and taller.
+  const [sx, sz] = ARENA_LAVA_POOLS[0];
+  const { points: smoke, base: smokeBase } = cloud(
+    SMOKE_COUNT, COL_SMOKE, 0.7, 0.22, false,
+    () => [sx + (rng() - 0.5) * 2, 0.5 + rng() * 1.0, sz + (rng() - 0.5) * 2]);
+  return { embers, emberBase, smoke, smokeBase };
 }
 
 function buildFarSilhouettes(scene) {
@@ -1509,12 +1833,19 @@ export function buildLevel(scene) {
   buildForestPond(scene);
   buildForestStream(scene);
   buildForestUndergrowth(scene);
+  buildArenaDisc(scene);
+  buildArenaRing(scene);
+  const { crackMats } = buildArenaRim(scene);
+  buildArenaGate(scene);
+  buildArenaSpires(scene);
+  buildApproachPiles(scene);
   const { lavaMats } = buildLava(scene);
   buildShafts(scene);
   buildFarSilhouettes(scene);
   const { gulls, clouds } = buildSky(scene);
   const { points: fireflies, base: fireflyBase } = buildFireflies(scene);
-  return { lavaMats, gulls, clouds, fireflies, fireflyBase };
+  const { embers, emberBase, smoke, smokeBase } = buildArenaParticles(scene);
+  return { lavaMats, crackMats, gulls, clouds, fireflies, fireflyBase, embers, emberBase, smoke, smokeBase };
 }
 
 export function buildPlayerMesh() {

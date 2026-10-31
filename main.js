@@ -71,7 +71,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(FOG_VILLAGE);
 scene.fog = new THREE.FogExp2(FOG_VILLAGE, FOG_DENSITY);
 const { sun } = buildLights(scene);
-const { lavaMats, gulls, clouds, fireflies, fireflyBase } = buildLevel(scene);
+const { lavaMats, crackMats, gulls, clouds, fireflies, fireflyBase, embers, emberBase, smoke, smokeBase } =
+  buildLevel(scene);
 const playerMesh = buildPlayerMesh();
 scene.add(playerMesh);
 
@@ -321,6 +322,9 @@ function updateWorld(dt) {
   // Lava breathes (emissive pulse; the only saturated color in the game).
   const lavaGlow = 1.8 + 0.5 * Math.sin(animT * 2.2);
   for (const m of lavaMats) m.emissiveIntensity = lavaGlow;
+  // Rim cracks glow dimmer than the pools, on the same breath.
+  const crackGlow = 1.2 + 0.25 * Math.sin(animT * 2.2 + 0.8);
+  for (const m of crackMats) m.emissiveIntensity = crackGlow;
 
   // Gulls circle the shore, wings flapping; clouds drift slowly.
   for (const gu of gulls) {
@@ -348,6 +352,28 @@ function updateWorld(dt) {
       p.array[i * 3] = bx + Math.sin(animT * 0.4 + ph) * 0.5;
       p.array[i * 3 + 1] = by + Math.sin(animT * 0.6 + ph * 1.7) * 0.3;
       p.array[i * 3 + 2] = bz + Math.cos(animT * 0.35 + ph) * 0.5;
+    }
+    p.needsUpdate = true;
+  }
+
+  // Embers rise off the lava and recycle; smoke drifts slower and taller.
+  if (embers && emberBase) {
+    const p = embers.geometry.attributes.position;
+    for (let i = 0; i < emberBase.length; i++) {
+      const [bx, by, bz, ph, sp, wob] = emberBase[i];
+      p.array[i * 3] = bx + Math.sin(animT * 1.1 + wob) * 0.25;
+      p.array[i * 3 + 1] = by + ((animT * sp + ph) % 2.2);
+      p.array[i * 3 + 2] = bz + Math.cos(animT * 0.9 + wob) * 0.25;
+    }
+    p.needsUpdate = true;
+  }
+  if (smoke && smokeBase) {
+    const p = smoke.geometry.attributes.position;
+    for (let i = 0; i < smokeBase.length; i++) {
+      const [bx, by, bz, ph, sp, wob] = smokeBase[i];
+      p.array[i * 3] = bx + Math.sin(animT * 0.5 + wob) * 0.5;
+      p.array[i * 3 + 1] = by + ((animT * sp * 0.5 + ph) % 3.5);
+      p.array[i * 3 + 2] = bz + Math.cos(animT * 0.4 + wob) * 0.5;
     }
     p.needsUpdate = true;
   }

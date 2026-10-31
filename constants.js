@@ -84,15 +84,14 @@ export const WALLS = [
   [-20.5, 1, -40, 1, 2, 42, 'treeline'],
   [20.5, 1, -40, 1, 2, 42, 'treeline'],
   [0, 1, -60.5, 42, 2, 1, 'treeline'],
-  // Pass corridor sides.
-  [32, 1.5, -6.5, 26, 3, 1, 'rock'],
-  [32, 1.5, 6.5, 26, 3, 1, 'rock'],
-  // Arena: west segments (pass opening), east, north, south.
-  [43.5, 2, -10, 1, 4, 8, 'rock'],
-  [43.5, 2, 10, 1, 4, 8, 'rock'],
-  [72.5, 2, 0, 1, 4, 30, 'rock'],
-  [58, 2, -14.5, 30, 4, 1, 'rock'],
-  [58, 2, 14.5, 30, 4, 1, 'rock'],
+  // Pass corridor sides. Extended east (x .. 47.5) to meet the arena mouth
+  // gate pillars (issue #9): the corridor walls run into the gate, leaving
+  // no gap between the corridor and the crater ring ends.
+  [33.25, 1.5, -6.5, 28.5, 3, 1, 'rock'],
+  [33.25, 1.5, 6.5, 28.5, 3, 1, 'rock'],
+  // Arena (issue #9): no rectangular walls. The boundary is the circular
+  // collider ring (ARENA_RING_* + arenaRingLayout in game.js), rendered and
+  // collided from the same shared layout.
 ];
 
 // Hills: buried spheres the player rolls over. [cx, cy, cz, radius]
@@ -581,7 +580,7 @@ export const COL_MUSHROOM_CAP = 0xb8a080;
 export const COL_FERN = 0x4f7a3f;
 export const COL_STUMP_TOP = 0xa89060;
 export const COL_SHAFT_FOREST = 0xd8e8c0;
-export const COL_SHAFT_ARENA = 0xff6a4a;
+export const COL_SHAFT_ARENA = 0xff2200; // lava red: salmon read as brown columns (issue #9)
 export const COL_FIREFLY = 0xb8c86a;
 
 // Forest zone layout (issue #8): a grove you navigate. Thickets are walls,
@@ -770,3 +769,80 @@ export const FOREST_SHAFTS = [
 ];
 export const FOREST_SHAFT_OPACITY = 0.1;
 export const FIREFLY_COUNT = 60;
+
+// Volcanic crater arena (issue #9): a circle, not a rectangle. The fighting
+// floor is a flat ash disc; a lava moat rings it; a piled-rock rim encloses
+// it. All spectacle lives outside the playable radius; the floor stays flat,
+// circular, and clear. Lava is decorative only: no collider, no damage, ever.
+export const ARENA_DISC_R = 11.5; // fighting floor disc radius, flat ash
+export const ARENA_BORDER_IN = 11.1; // sumo-ring border annulus (visual-only)
+export const ARENA_BORDER_OUT = 11.6;
+export const ARENA_MOAT_IN = 11.8; // lava moat annulus (visual-only)
+export const ARENA_MOAT_OUT = 12.7;
+// Collider ring: SEGMENTS box segments on a circle of RING_R, rotated to
+// tangent. Segments whose center falls within the west gap are skipped.
+// Gap half-width 6 (chord ~12) matches the pass corridor (z -6..6).
+export const ARENA_RING_R = 13;
+export const ARENA_RING_SEGMENTS = 16;
+export const ARENA_GAP_HALF_WIDTH = 6;
+export const ARENA_RING_H = 4;
+export const ARENA_RING_T = 1;
+export const ARENA_SEG_OVERLAP = 1.1; // segment length vs exact chord
+// Backdrop ring: a second, taller, purely visual ring row behind the piles,
+// so no sky shows through rim gaps. Same angles/skips as the collider ring.
+export const ARENA_BACKDROP_R = 14;
+export const ARENA_BACKDROP_H = 7;
+export const ARENA_BACKDROP_T = 1.2;
+// Mouth gate: obsidian pillars capping the ring ends + a cracked two-piece
+// lintel. Pillar centers come from the shared ring layout (gap edge angles).
+export const ARENA_GATE = { pillarW: 1.4, pillarH: 5, lintelH: 0.8, lintelW: 1.2, lintelLen: 8.0 }; // lintelLen is per half
+// Rim piles: 18 candidate angles (10 + i*20 deg), skipping those near the
+// gap -> 14 piles. Centers on ARENA_PILE_R, seeded rocks, heights 2.5-6
+// (piles 2, 8, 11 are the dramatic 5-6 ones).
+export const ARENA_PILE_R = 13.5;
+export const ARENA_RIM_SEED = 31;
+export const ARENA_CRACK_COUNT = 8; // glowing splits in rim rocks
+// Lava pools at the rim base [x, z, r]: tucked between piles, clear of the
+// disc, merged with the moat visually. Plus the moat, the only arena lava.
+export const ARENA_LAVA_POOLS = [
+  [68.0, 8.4, 1.4],
+  [55.8, 12.7, 1.2],
+  [60.2, -12.6, 1.2],
+];
+// Volcanic spires [x, z, h, baseW]: the skyline, behind the backdrop wall.
+export const ARENA_SPIRES = [
+  [73.5, 0, 11, 1.6],
+  [50.3, 13.4, 8.5, 1.4],
+  [50.3, -13.4, 9.5, 1.5],
+];
+// Red shafts [x, z]: over the three pools + two over the moat.
+export const ARENA_SHAFTS = [
+  [68.0, 8.4],
+  [55.8, 12.7],
+  [60.2, -12.6],
+  [70, 0],
+  [67.2, -7.7],
+];
+// Approach piles [x, z]: rock shoulders outside the corridor walls (embedded
+// in the wall line) for the pass's last stretch. Taller than the 3-high walls
+// so their tops read from inside the corridor.
+export const ARENA_APPROACH = [
+  [36, -7.2],
+  [39.5, -7.2],
+  [43, -7.2],
+  [36, 7.2],
+  [39.5, 7.2],
+  [43, 7.2],
+];
+export const ARENA_APPROACH_SEED = 32;
+export const EMBER_COUNT = 80;
+export const SMOKE_COUNT = 30;
+// Crater palette: obsidian + ash + dark stone only. Lava red stays the only
+// saturated color; embers are lava-family garnish.
+export const COL_OBSIDIAN = 0x1e1a20; // near-black pile rock / backdrop
+export const COL_OBSIDIAN_2 = 0x2b2630; // dark grey pile rock
+export const COL_OBSIDIAN_3 = 0x3d3438; // warm brown-grey pile rock
+export const COL_ARENA_DISC = 0x38323e; // lightened fighting floor
+export const COL_ARENA_STRATA = 0x5d5866; // geological band on tall piles
+export const COL_EMBER = 0xff7a2a;
+export const COL_SMOKE = 0x4a4a4a;

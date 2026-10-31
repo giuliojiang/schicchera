@@ -48,6 +48,35 @@ export function zoneOf(x, z, zones) {
   return 'village';
 }
 
+// Crater ring layout (issue #9). Pure: SEGMENTS box segments on a circle,
+// each rotated to tangent; segments near the west gap are skipped; the two
+// gap-edge angles place the mouth gate pillars. physics.js and level.js both
+// call this, so colliders and visuals can never drift apart.
+export function arenaRingLayout({ cx, cz, radius, segments, gapHalfWidth, segOverlap }) {
+  const step = (Math.PI * 2) / segments;
+  const gapCenter = Math.PI; // west, facing the pass
+  const gapHalfAngle = Math.asin(Math.min(1, gapHalfWidth / radius));
+  const segLen = 2 * radius * Math.sin(step / 2) * segOverlap;
+  const norm = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const kept = [];
+  for (let i = 0; i < segments; i++) {
+    const a = i * step;
+    if (Math.abs(norm(a - gapCenter)) < gapHalfAngle) continue;
+    kept.push({
+      angle: a,
+      x: cx + radius * Math.cos(a),
+      z: cz + radius * Math.sin(a),
+      rotY: -(a + Math.PI / 2), // local X axis onto the tangent
+      len: segLen,
+    });
+  }
+  // Gap edges: the segment boundaries flanking the skipped run.
+  const k = Math.round(gapCenter / step);
+  const m = Math.floor(gapHalfAngle / step);
+  const gapEdges = [(k - m - 0.5) * step, (k + m + 0.5) * step];
+  return { kept, gapEdges, gapHalfAngle, segLen };
+}
+
 // Seeded RNG (mulberry32) for any future gameplay randomness.
 export function mulberry32(seed) {
   let a = seed >>> 0;

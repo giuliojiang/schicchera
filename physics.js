@@ -2,6 +2,14 @@
 import * as CANNON from 'cannon-es';
 import {
   ARCH,
+  ARENA_GAP_HALF_WIDTH,
+  ARENA_GATE,
+  ARENA_RING_H,
+  ARENA_RING_R,
+  ARENA_RING_SEGMENTS,
+  ARENA_RING_T,
+  ARENA_SEG_OVERLAP,
+  ARENA_CENTER,
   BARRELS,
   BEACH_BASE_Y,
   BEACH_PARAPET_H,
@@ -62,6 +70,7 @@ import {
   ZONE_PASS,
   ZONE_VILLAGE,
 } from './constants.js';
+import { arenaRingLayout } from './game.js';
 
 export function createWorld() {
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, GRAVITY_Y, 0) });
@@ -171,6 +180,42 @@ export function createStaticLevel(world) {
   // Boundary walls (visible except the 'none' shoreline wall).
   for (const [x, y, z, sx, sy, sz] of WALLS) {
     addBox(x, y, z, sx, sy, sz);
+  }
+
+  // Crater ring (issue #9): the arena's true circular boundary. Same shared
+  // layout as the visuals in level.js. The west gap is the only way in/out.
+  {
+    const { kept, gapEdges } = arenaRingLayout({
+      cx: ARENA_CENTER[0],
+      cz: ARENA_CENTER[1],
+      radius: ARENA_RING_R,
+      segments: ARENA_RING_SEGMENTS,
+      gapHalfWidth: ARENA_GAP_HALF_WIDTH,
+      segOverlap: ARENA_SEG_OVERLAP,
+    });
+    for (const s of kept) {
+      addBox(s.x, ARENA_RING_H / 2, s.z, s.len, ARENA_RING_H, ARENA_RING_T, 0, s.rotY, 0);
+    }
+    // Mouth gate: pillars capping the ring ends + cracked two-piece lintel.
+    // Pillars sit outside the 12-wide walkable gap; colliders match visuals.
+    const pw = ARENA_GATE.pillarW;
+    const ph = ARENA_GATE.pillarH;
+    const pillars = gapEdges.map((e) => [
+      ARENA_CENTER[0] + ARENA_RING_R * Math.cos(e),
+      ARENA_RING_R * Math.sin(e),
+    ]);
+    for (const [px, pz] of pillars) {
+      addBox(px, ph / 2, pz, pw, ph, pw);
+    }
+    // Lintel halves: each spans pillar-to-middle (len 8 covers the 7.22
+    // pillar offset), split at z=0 with a y/x step between them so the crack
+    // reads. High above reach, but collided anyway.
+    const gx = pillars[0][0];
+    const lh = ARENA_GATE.lintelH;
+    const lw = ARENA_GATE.lintelW;
+    const llen = ARENA_GATE.lintelLen;
+    addBox(gx, ph + lh / 2, -llen / 2 + 0.1, lw, lh, llen, 0, 0, 0);
+    addBox(gx + 0.3, ph + lh / 2 - 0.25, llen / 2 - 0.1, lw, lh, llen, 0, 0, 0);
   }
 
   // Hills: buried static spheres, crests stay walkable.
