@@ -295,13 +295,30 @@ export const ROCKS = [
 // the tall end; secondary blocks at the low end. bodyTone picks the concrete
 // shade (0 light / 1 dark); roofTone picks the stepped-crown variant.
 export const HUTS = [
-  [-13, 12.5, 2.03, 0, 0, 9, 1], // west bridge block
-  [13, 12.5, -2.03, 1, 1, 8, 0], // east bridge block
-  [-13, -12, 0.83, 1, 2, 13, 1], // plaza block (tall)
-  [13, -12, -0.83, 0, 1, 12, 0], // plaza block (tall)
-  [-6, -14, 1.45, 0, 0, 9.5, 0], // north road block
-  [11.5, 4.5, 3.06, 1, 2, 10.5, 1], // east road block (clear of the plaza camera orbit)
-  [-14, -4.5, 0.15, 0, 1, 8.5, 0], // west road block
+  [-13, 12.5, 2.03, 0, 0, 12, 1], // west bridge block
+  [13, 12.5, -2.03, 1, 1, 11, 0], // east bridge block
+  [-13, -12, 0.83, 1, 2, 17, 1], // plaza block (tallest)
+  [13, -12, -0.83, 0, 1, 16, 0], // plaza block (tallest)
+  [-6, -14, 1.45, 0, 0, 12, 0], // north road block
+  [11.5, 4.5, 3.06, 1, 2, 14, 1], // east road block (clear of the plaza camera orbit)
+  [-14, -4.5, 0.15, 0, 1, 11, 0], // west road block
+];
+// Second-wave massing (deeper rework): slim gate/corner towers and low
+// street-canyon bars. All axis-aligned; every rect is clearance-checked
+// (roads, spurs, plaza, channel, sightlines, props) — see the commit.
+// Towers: [x, z, footprint, height]. Plaza pair frames the north road;
+// corners anchor the map edges.
+export const VILLAGE_TOWERS = [
+  [-7, -18.5, 2.6, 13], // forest-gate west pylon
+  [7.5, -18.5, 2.6, 13], // forest-gate east pylon
+  [-11, -18, 3, 18], // north-west landmark
+  [17, 16.5, 2.8, 16], // south-east landmark (merges with the H2 block)
+];
+// Bars: [cx, cz, lengthX, thickZ, height]. They wall the east road into a
+// canyon; the north bar fuses with the H6 block as stepped massing.
+export const VILLAGE_BARS = [
+  [11.5, 4.6, 10, 2.4, 9], // north of the east road
+  [12, -4.6, 6, 2.4, 10], // south of the east road
 ];
 // Retired by issue #14: the timber/shutter/flowerbox hut dressing is gone.
 // Kept (unused) so the shape of the old spec stays visible in one place.
@@ -356,8 +373,8 @@ export const FENCES = [
   [-8.6, -9.5, -8.6, -13.5], // H3 garden
   [2.2, -6, 2.2, -12], // north road edging
   [-50, 11, -48, 11, -6], // shore run with draped net
-  [14, 2.5, 14, 6.5], // H6 garden
   [2, 12.3, 6, 12.3], // channel bank
+  // H6 garden run retired: the north street-canyon bar now stands on its line.
 ];
 // Benches: [x, z, rotY, baseY]. Plaza bench sits off-axis so it never blocks the spawn view.
 export const BENCHES = [

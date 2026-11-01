@@ -200,6 +200,8 @@ import {
   TIDE_POOLS,
   TREES,
   TRUNK_RADIUS,
+  VILLAGE_BARS,
+  VILLAGE_TOWERS,
   WALLS,
   WELL,
   ZONE_ARENA,
@@ -371,6 +373,29 @@ function brutalistMats() {
     color: COL_WINDOW, roughness: 0.9, metalness: 0, flatShading: true,
   });
   concreteMats = { light, dark, window };
+  // Blender-baked upgrade (blend/village_brutalist.py): board-formed color +
+  // bump replace the canvas fallback once loaded. Missing files (fresh clone
+  // without the local blend/ exports) silently keep the canvas look.
+  const loader = new THREE.TextureLoader();
+  loader.load('./blend/village_concrete.png', (baked) => {
+    baked.wrapS = THREE.RepeatWrapping;
+    baked.wrapT = THREE.RepeatWrapping;
+    baked.colorSpace = THREE.SRGBColorSpace;
+    light.map = baked;
+    dark.map = baked;
+    light.needsUpdate = true;
+    dark.needsUpdate = true;
+  }, undefined, () => {});
+  loader.load('./blend/village_concrete_bump.png', (bump) => {
+    bump.wrapS = THREE.RepeatWrapping;
+    bump.wrapT = THREE.RepeatWrapping;
+    light.bumpMap = bump;
+    dark.bumpMap = bump;
+    light.bumpScale = 0.6;
+    dark.bumpScale = 0.6;
+    light.needsUpdate = true;
+    dark.needsUpdate = true;
+  }, undefined, () => {});
   return concreteMats;
 }
 
@@ -418,10 +443,14 @@ function buildPlaza(scene) {
   // collider-free like the old stub, so plaza movement is exactly unchanged.
   // Never tagged as a camera blocker (pedestals are excluded, issue #12).
   {
-    const { light } = brutalistMats();
-    const shaft = box(0.9, 1.5, 0.9, light, 0, 0.75, 0);
+    const { light, dark } = brutalistMats();
+    // Stepped plinth + massive shaft: reads heavy without rising past the
+    // dagger's pickup reach (cap top ~1.6, dagger floats at 1.8).
+    const plinth = box(2.0, 0.3, 2.0, dark, 0, 0.15, 0);
+    scene.add(plinth);
+    const shaft = box(1.3, 1.2, 1.3, light, 0, 0.9, 0);
     scene.add(shaft);
-    const capSlab = box(1.1, 0.12, 1.1, light, 0, 1.56, 0);
+    const capSlab = box(1.5, 0.12, 1.5, light, 0, 1.56, 0);
     scene.add(capSlab);
   }
   // Planting ring just outside the paving (skips the road crossings).
@@ -763,6 +792,67 @@ function buildHuts(scene) {
         cxOff - 0.8, baseH + crownH + 0.28, -0.5, 0, hi, 0, g);
       part(GEO.ico, M(COL_BUSH[(hi + 1) % 3]), 0.4, 0.3, 0.4,
         -1.2, baseH + 0.22, 0.8, 0, hi * 0.7, 0, g);
+    }
+    scene.add(g);
+  });
+}
+
+// Second-wave massing (deeper rework): gate pylons, landmark towers, and the
+// east-road canyon bars. All axis-aligned slabs from the shared concrete
+// materials. Towers read their window grids cheaply: one tall dark strip per
+// face, divided by horizontal fins. Bars get ribbon strips split by vertical
+// piers. Colliders in physics.js match the slab footprints exactly.
+function buildVillageMassing(scene) {
+  const { light, dark, window } = brutalistMats();
+  VILLAGE_TOWERS.forEach(([x, z, s, h], ti) => {
+    const mat = ti % 2 === 0 ? light : dark;
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    part(GEO.box, mat, s, h, s, 0, h / 2, 0, 0, 0, 0, g)
+      .userData.blocker = true; // camera raycast blocker (issue #12)
+    // Cap slab + core: stepped silhouette against the sky.
+    part(GEO.box, mat, s + 0.3, 0.4, s + 0.3, 0, h + 0.2, 0, 0, 0, 0, g)
+      .userData.blocker = true;
+    part(GEO.box, mat, 1.2, 1.5, 1.2, 0, h + 1.15, 0, 0, 0, 0, g)
+      .userData.blocker = true;
+    // Window strips on all four faces + dividing fins.
+    for (let side = 0; side < 4; side++) {
+      const ry = (side * Math.PI) / 2;
+      const fx = Math.sin(ry);
+      const fz = Math.cos(ry);
+      part(GEO.box, window, 1.1, h - 4.4, 0.14,
+        fx * (s / 2 - 0.02), 2.4 + (h - 4.4) / 2, fz * (s / 2 - 0.02), 0, ry, 0, g);
+      for (let wy = 3.4; wy < h - 1.6; wy += 2.2) {
+        part(GEO.box, mat, 1.5, 0.28, 0.3, fx * (s / 2 + 0.05), wy, fz * (s / 2 + 0.05), 0, ry, 0, g);
+      }
+    }
+    // Landmark towers (not the gate pylons) carry a roof bush.
+    if (ti >= 2) {
+      part(GEO.ico, M(COL_BUSH[ti % 3]), 0.5, 0.38, 0.5, 0.6, h + 0.68, -0.4, 0, ti, 0, g);
+    }
+    // The NW landmark (index 2) has a Blender-modelled hero version: tag its
+    // primitive group so the async GLB can take over once loaded.
+    if (ti === 2) g.userData.heroTower = true;
+    scene.add(g);
+  });
+  VILLAGE_BARS.forEach(([cx, cz, w, t, h], bi) => {
+    const mat = bi % 2 === 0 ? light : dark;
+    const g = new THREE.Group();
+    g.position.set(cx, 0, cz);
+    part(GEO.box, mat, w, h, t, 0, h / 2, 0, 0, 0, 0, g)
+      .userData.blocker = true; // camera raycast blocker (issue #12)
+    // Roof cap band: long shadow line along the top.
+    part(GEO.box, mat, w + 0.2, 0.3, t + 0.2, 0, h + 0.15, 0, 0, 0, 0, g)
+      .userData.blocker = true;
+    // Ribbon window strips on both long faces + vertical dividing piers.
+    for (const fz of [-t / 2, t / 2]) {
+      for (const wy of [2.8, 5.2, 7.4]) {
+        if (wy > h - 1.2) continue;
+        part(GEO.box, window, w - 0.8, 0.9, 0.14, 0, wy, fz - Math.sign(fz) * 0.02, 0, 0, 0, g);
+      }
+      for (let px = -w / 2 + 1.1; px < w / 2 - 0.5; px += 2.2) {
+        part(GEO.box, mat, 0.3, h - 1.6, 0.25, px, (h - 1.6) / 2 + 0.6, fz + Math.sign(fz) * 0.05, 0, 0, 0, g);
+      }
     }
     scene.add(g);
   });
@@ -1882,6 +1972,35 @@ function buildSky(scene) {
   return { gulls, clouds };
 }
 
+// Hero landmark tower (blend/tower_nw.glb, origin at base centre, metres).
+// Loads async over the tagged primitive fallback: on arrival the primitives
+// hide (their camera blockers keep raycasting while invisible) and the
+// detailed model takes their place. A missing file keeps the primitives.
+function swapHeroTower(scene) {
+  let hero = null;
+  scene.traverse((o) => {
+    if (o.userData.heroTower) hero = o;
+  });
+  if (!hero) return;
+  new GLTFLoader().load(
+    './blend/tower_nw.glb',
+    (gltf) => {
+      const model = gltf.scene;
+      model.position.copy(hero.position);
+      model.traverse((o) => {
+        if (o.isMesh) {
+          o.castShadow = true;
+          o.receiveShadow = true;
+        }
+      });
+      hero.visible = false;
+      scene.add(model);
+    },
+    undefined,
+    () => {}
+  );
+}
+
 export function buildLevel(scene) {
   slab(scene, ZONE_VILLAGE, COL_VILLAGE_GROUND);
   slab(scene, BEACH_SLAB, COL_BEACH_GROUND, BEACH_BASE_Y);
@@ -1906,6 +2025,8 @@ export function buildLevel(scene) {
   buildGiantTree(scene);
   buildRocks(scene);
   buildHuts(scene);
+  buildVillageMassing(scene);
+  swapHeroTower(scene);
   buildProps(scene);
   buildSeaside(scene);
   buildArch(scene);

@@ -67,6 +67,8 @@ import {
   STALL,
   TREES,
   TRUNK_RADIUS,
+  VILLAGE_BARS,
+  VILLAGE_TOWERS,
   WALLS,
   WELL,
   ZONE_ARENA,
@@ -267,6 +269,14 @@ export function createStaticLevel(world) {
   for (const [hx, hz, rotY, , , bodyH] of HUTS) {
     const h = bodyH || HUT_BODY[1];
     addBox(hx, h / 2, hz, HUT_BODY[0], h, HUT_BODY[2], 0, rotY, 0);
+  }
+  // Second-wave massing (deeper rework): towers + canyon bars. Axis-aligned
+  // slabs matching the visuals exactly. Clearance-checked, see the commit.
+  for (const [x, z, s, h] of VILLAGE_TOWERS) {
+    addBox(x, h / 2, z, s, h, s);
+  }
+  for (const [cx, cz, w, t, h] of VILLAGE_BARS) {
+    addBox(cx, h / 2, cz, w, h, t);
   }
 
   // Village props. Every blocking prop has a collider matching its visual.
