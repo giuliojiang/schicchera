@@ -1,0 +1,3 @@
+# Blender automatic backup files (blend/ holds the .blend source + exports)
+*.blend1
+*.blend2
