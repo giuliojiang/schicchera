@@ -98,6 +98,9 @@ import {
   SQUASH_XZ,
   SQUASH_Y,
   SUN_OFFSET,
+  SWORD_RETURN_DEST,
+  SWORD_RETURN_FADE_TIME,
+  SWORD_RETURN_FLASH,
   TREMBLE_POS,
   TREMBLE_ROT,
   VIS_LOCK_TAU,
@@ -495,7 +498,8 @@ function releaseFlick() {
 // Respawn safety net (issue #13 §1): the last grounded spot, and the fade.
 // Recovery is not damage: no HP/piece change, no combat cooldown touched.
 let safeSpot = { x: PLAYER_SPAWN[0], y: PLAYER_SPAWN[1], z: PLAYER_SPAWN[2] };
-let respawnFlash = 0; // overlay fade timer, decays over RESPAWN_FADE_TIME
+let respawnFlash = 0; // overlay fade timer, decays over respawnFlashMax
+let respawnFlashMax = RESPAWN_FADE_TIME; // gold returns use a longer flash
 let lastRespawn = null; // {frame, reason} for the debug bridge
 const respawnFadeEl = document.getElementById('respawnFade');
 
@@ -529,8 +533,44 @@ function doRespawn(reason) {
   smoothVelX = 0;
   smoothVelZ = 0;
   respawnFlash = RESPAWN_FADE_TIME;
-  if (respawnFadeEl) respawnFadeEl.style.opacity = '1';
+  respawnFlashMax = RESPAWN_FADE_TIME;
+  if (respawnFadeEl) {
+    respawnFadeEl.style.background = '#000'; // safety net is always the black blink
+    respawnFadeEl.style.opacity = '1';
+  }
   lastRespawn = { frame: frames, reason };
+}
+
+// Sword return: collecting the beach weapon sends the player back to the
+// beginning. Same snap mechanics as the safety net, but a longer golden
+// flash plus an upward mote fountain, so it reads as a reward, never as a
+// death. Beach-only: the other spokes walk back fine.
+function doSwordReturn() {
+  const [dx, dy, dz] = SWORD_RETURN_DEST;
+  playerBody.position.set(dx, dy, dz);
+  playerBody.velocity.set(0, 0, 0);
+  playerBody.angularVelocity.set(0, 0, 0);
+  playerBody.wakeUp();
+  if (charging) {
+    charging = false;
+    holdTime = 0;
+    stopCharge();
+    playerMotes.dissipate();
+  }
+  anchorX = dx;
+  anchorZ = dz;
+  smoothGround = dy;
+  smoothVelX = 0;
+  smoothVelZ = 0;
+  safeSpot = { x: dx, y: dy, z: dz };
+  playerMotes.burst(0, 1, 0, 4); // arrival fountain, mesh-local up
+  respawnFlash = SWORD_RETURN_FADE_TIME;
+  respawnFlashMax = SWORD_RETURN_FADE_TIME;
+  if (respawnFadeEl) {
+    respawnFadeEl.style.background = SWORD_RETURN_FLASH;
+    respawnFadeEl.style.opacity = '1';
+  }
+  lastRespawn = { frame: frames, reason: 'sword-return' };
 }
 
 let pendingCombat = null; // 'player' | 'boss', applied in stepSim after the step
@@ -1002,6 +1042,7 @@ function updateWorld(dt) {
       playPickup(pieces.length);
       pieces.push(p.id);
       unlockMusicLayer(p.id); // its stem fades in over ~1 s, under the chime
+      if (p.id === 'sword') doSwordReturn(); // beach spoke: back to the beginning
     }
   }
 }
@@ -1168,7 +1209,7 @@ function frame(now) {
     // already restored; this just covers the snap.
     if (respawnFlash > 0) {
       respawnFlash = Math.max(0, respawnFlash - dt);
-      if (respawnFadeEl) respawnFadeEl.style.opacity = String(respawnFlash / RESPAWN_FADE_TIME);
+      if (respawnFadeEl) respawnFadeEl.style.opacity = String(respawnFlash / respawnFlashMax);
     }
 
     updateCamera(frames === 0 ? 1 : dt);

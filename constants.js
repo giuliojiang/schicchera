@@ -1068,3 +1068,11 @@ export const VIS_UNLOCK_TAU = 0.3; // s, pickup fade-in ~1 s (mirrors MUSIC_UNLO
 export const VIS_LOCK_TAU = 0.15; // s, damage fade-out ~0.5 s (mirrors MUSIC_LOCK_TAU)
 export const VIS_STOP_TAU = 0.3; // s, game-over fade to Layer 0 (mirrors MUSIC_STOP_TAU)
 export const VIS_SKY_RADIUS = 350; // gradient dome radius (camera far is 400)
+
+// Sword return (beach spoke): collecting the sword returns the player to
+// the beginning — the climb back up is the hard part, not the fun part.
+// Same snap mechanics as the safety net, but a warm golden flash instead of
+// the black blink, so it reads as a reward, never as a death.
+export const SWORD_RETURN_DEST = [0, 2, 6]; // the beginning (== PLAYER_SPAWN)
+export const SWORD_RETURN_FADE_TIME = 0.6; // s, longer golden flash
+export const SWORD_RETURN_FLASH = '#e8c87a'; // warm gold, never safety-net black
