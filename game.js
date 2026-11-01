@@ -2,8 +2,8 @@
 // Movement core, combat/momentum resolution, and the boss behavior cycle
 // all live here, still dependency-free (spec section 14.8).
 
-// Quadratic charge fraction in [0,1]. Same function drives speed,
-// squash, and charge tone (spec section 6).
+// Quadratic charge fraction in [0,1]. Same function drives speed, charge
+// feedback (particles, glow, tremble, squint), and charge tone (issue #4).
 export function chargeFraction(holdTime, fullChargeTime) {
   if (!(fullChargeTime > 0)) return 0;
   const t = Math.max(0, holdTime) / fullChargeTime;

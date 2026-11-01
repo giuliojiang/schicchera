@@ -53,10 +53,35 @@ export const PLAYER_SPAWN = [0, 2, 6];
 export const GROUND_FRICTION = 0.06;
 export const GROUND_RESTITUTION = 0.05;
 
-// Charge squash (fraction of the quadratic charge01).
-export const SQUASH_Y = 0.35; // max Y compression at full charge
-export const SQUASH_XZ = 0.18; // max XZ expansion at full charge
+// Boss wind-up squash (fraction of the linear wind-up progress). The player
+// charge squash is gone (issue #4): scaling fights the tumbling cube, so the
+// four charge layers below replace it. The boss keeps its squash: crouching
+// to pounce reads naturally on a ball.
+export const SQUASH_Y = 0.35; // max Y compression at full wind-up
+export const SQUASH_XZ = 0.18; // max XZ expansion at full wind-up
 export const LAUNCH_STRETCH_TIME = 0.16; // s of un-squash pop on release
+
+// Charge feedback (issue #4). Every layer is driven by the same quadratic
+// chargeFraction that sets flick speed, so the visuals never lie about power.
+// Palette is gold-white only: red belongs to the damage flash and the lava.
+export const CHARGE_MOTES = 150; // player swarm pool (fixed, no per-frame alloc)
+export const CHARGE_MOTE_SIZE = 0.22; // world units, sizeAttenuation on
+export const CHARGE_MOTE_R_OUT = 1.7; // orbit radius at zero charge
+export const CHARGE_MOTE_R_IN = 0.95; // orbit radius at full charge (hugs cube)
+export const CHARGE_BURST_TIME = 0.4; // s the release burst takes to fade
+export const BOSS_MOTES = 120; // boss wind-up swarm pool
+export const BOSS_MOTE_SIZE = 0.26;
+export const BOSS_MOTE_R_OUT = 2.2; // orbit radius at wind-up start
+export const BOSS_MOTE_R_IN = 1.15; // orbit radius at bump (hugs ball)
+export const CHARGE_GLOW_LOW = 0xc47a24; // dim amber at low charge
+export const CHARGE_GLOW_HIGH = 0xfff3c4; // bright gold-white at full charge
+export const CHARGE_GLOW_MAX = 0.12; // emissive intensity at full charge
+export const CHARGE_PULSE_AMP = 0.1; // full-charge pulse amplitude
+export const CHARGE_PULSE_FREQ = 10; // rad/s full-charge pulse
+export const TREMBLE_POS = 0.035; // m, max mesh-only position jitter
+export const TREMBLE_ROT = 0.03; // rad, max mesh-only rotation jitter
+export const EYE_SQUINT = 0.7; // max eye Y compression at full charge
+export const CHARGE_MOTE_TINT = 0xffe9b0; // warm gold-white motes (never red)
 
 // Audio tuning.
 export const CHARGE_TONE_BASE = 150; // Hz at zero charge

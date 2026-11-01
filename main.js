@@ -7,6 +7,10 @@ import {
   BOSS_BUMP_SPEED,
   BOSS_BUMP_TIME,
   BOSS_HP,
+  BOSS_MOTE_R_IN,
+  BOSS_MOTE_R_OUT,
+  BOSS_MOTE_SIZE,
+  BOSS_MOTES,
   BOSS_ROAM_RADIUS,
   BOSS_ROAM_RATE,
   BOSS_ROLL_SPEED,
@@ -21,9 +25,21 @@ import {
   CAMERA_LOOKAHEAD_MAX,
   CAMERA_LOOKAHEAD_TIME,
   CAMERA_VEL_RATE,
+  CHARGE_BURST_TIME,
+  CHARGE_GLOW_HIGH,
+  CHARGE_GLOW_LOW,
+  CHARGE_GLOW_MAX,
+  CHARGE_MOTE_R_IN,
+  CHARGE_MOTE_R_OUT,
+  CHARGE_MOTE_SIZE,
+  CHARGE_MOTE_TINT,
+  CHARGE_MOTES,
+  CHARGE_PULSE_AMP,
+  CHARGE_PULSE_FREQ,
   COL_DAMAGE_FLASH,
   COMBAT_COOLDOWN,
   DAMAGE_FLASH_TIME,
+  EYE_SQUINT,
   FOG_ARENA,
   FOG_BEACH,
   FOG_DENSITY,
@@ -43,6 +59,8 @@ import {
   SQUASH_XZ,
   SQUASH_Y,
   SUN_OFFSET,
+  TREMBLE_POS,
+  TREMBLE_ROT,
   WINDUP_DURATION,
   ZONE_ARENA,
   ZONE_BEACH,
@@ -50,6 +68,7 @@ import {
   ZONE_PASS,
   ZONE_VILLAGE,
 } from './constants.js';
+import { createMotes } from './chargefx.js';
 import {
   applyFlickVelocity,
   bossNext,
@@ -141,6 +160,30 @@ const stepper = createStepper(world);
 const bossMesh = buildBossMesh();
 scene.add(bossMesh);
 
+// Charge feedback swarms (issue #4, layer 1 + §9 boss reuse). Parented to the
+// meshes so they follow automatically while the bodies roll and tumble.
+// Visual-only by construction: local positions/colors, no physics contact.
+const playerMotes = createMotes(THREE, {
+  count: CHARGE_MOTES,
+  size: CHARGE_MOTE_SIZE,
+  tint: CHARGE_MOTE_TINT,
+  rOut: CHARGE_MOTE_R_OUT,
+  rIn: CHARGE_MOTE_R_IN,
+  burstTime: CHARGE_BURST_TIME,
+  seed: 41,
+});
+playerMesh.add(playerMotes.points);
+const bossMotes = createMotes(THREE, {
+  count: BOSS_MOTES,
+  size: BOSS_MOTE_SIZE,
+  tint: CHARGE_MOTE_TINT,
+  rOut: BOSS_MOTE_R_OUT,
+  rIn: BOSS_MOTE_R_IN,
+  burstTime: CHARGE_BURST_TIME,
+  seed: 97,
+});
+bossMesh.add(bossMotes.points);
+
 playerBody.addEventListener('collide', (e) => {
   try {
     const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
@@ -169,6 +212,13 @@ let frames = 0;
 let lastDt = 0;
 let zone = 'village';
 let animT = 0;
+let fxT = 0; // game-time clock for charge fx (tremble, full-charge pulse)
+
+// Scratch objects for charge fx: module-scope, never per-frame allocation.
+const tmpBurst = new THREE.Vector3();
+const tmpQ = new THREE.Quaternion();
+const GLOW_LOW = new THREE.Color(CHARGE_GLOW_LOW);
+const GLOW_HIGH = new THREE.Color(CHARGE_GLOW_HIGH);
 
 // Boss fight state (spec sections 9-10).
 let fightClock = 0; // game-time clock for the combat cooldown
@@ -248,6 +298,14 @@ function releaseFlick() {
   const speed = flickSpeed(holdTime, FULL_CHARGE_TIME, PLAYER_MAX_FLICK_SPEED);
   const frac = chargeFraction(holdTime, FULL_CHARGE_TIME);
   flickDirection(dirTmp);
+  // Release burst (issue #4): the swarm fires along the flick direction and
+  // fades. World direction into the mesh's local space; the burst is the
+  // launch payoff that replaces the old squash's job.
+  tmpBurst.set(dirTmp[0], 0, dirTmp[1]);
+  playerMesh.getWorldQuaternion(tmpQ);
+  tmpQ.invert();
+  tmpBurst.applyQuaternion(tmpQ);
+  playerMotes.burst(tmpBurst.x, tmpBurst.y, tmpBurst.z, 3 + 5 * frac);
   const v = playerBody.velocity;
   const [nx, ny, nz] = applyFlickVelocity(v.x, v.y, v.z, dirTmp[0], dirTmp[1], speed);
   const [cx, cy, cz] = clampSpeed(nx, ny, nz, SPEED_CLAMP);
@@ -303,11 +361,18 @@ function dropCharge() {
   charging = false;
   holdTime = 0;
   stopCharge();
+  // A cancelled charge never fired: motes simply dissipate, no burst.
+  playerMotes.dissipate();
 }
 
 function winFight() {
   phase = 'won';
   dropCharge();
+  playerMotes.hide();
+  bossMotes.hide();
+  // The celebration shows the loaded character, no fx: reset both glows.
+  playerMesh.userData.bodyMat.emissive.setHex(0x000000);
+  bossMesh.userData.bodyMat.emissive.setHex(0x000000);
   stopBossWindup();
   world.removeBody(bossBody);
   attachBossBall(CANNON, playerMesh, playerBody, bossMesh);
@@ -319,6 +384,7 @@ function winFight() {
 function loseFight() {
   phase = 'lost';
   dropCharge();
+  playerMotes.hide();
   stopBossWindup();
   document.getElementById('gameover').hidden = false;
 }
@@ -355,6 +421,8 @@ function updateBoss(dt) {
       bossBody.wakeUp();
       stopBossWindup();
       playBossBump();
+      // The wind-up swarm fires radially as the bump launches (§9 reuse).
+      bossMotes.burst(0, 0, 0, 3);
       bossStretchT = LAUNCH_STRETCH_TIME;
     }
     bossState = next;
@@ -489,9 +557,9 @@ function updateSquash(dt) {
     return;
   }
   if (charging) {
-    const f = chargeFraction(holdTime, FULL_CHARGE_TIME);
-    playerMesh.scale.set(1 + SQUASH_XZ * f, 1 - SQUASH_Y * f, 1 + SQUASH_XZ * f);
-    updateCharge(f);
+    // No squash during charge (issue #4): scaling fights the tumbling cube.
+    // The tone still follows the same quadratic fraction as the speed.
+    updateCharge(chargeFraction(holdTime, FULL_CHARGE_TIME));
     return;
   }
   // Ease back to 1.
@@ -522,23 +590,63 @@ function updateBossSquash(dt) {
   s.z += (1 - s.z) * Math.min(1, dt * 10);
 }
 
-function updateFlash(mesh, timer) {
+// Charge glow ramp (issue #4, layer 2): gold-white emissive on the body only,
+// driven by the same quadratic fraction as speed. Weapons keep their own
+// glint. Red is reserved for the damage flash and never appears here.
+function updateChargeGlow(mesh, f, pulse) {
   const mat = mesh.userData.bodyMat;
-  if (timer > 0) {
-    mat.emissive.setHex(COL_DAMAGE_FLASH);
-    mat.emissiveIntensity = 1;
-  } else {
-    mat.emissive.setHex(0x000000);
-    mat.emissiveIntensity = 1;
-  }
+  mat.emissive.copy(GLOW_LOW).lerp(GLOW_HIGH, Math.min(1, f));
+  let inten = CHARGE_GLOW_MAX * Math.min(1, f);
+  // Full charge is unmistakable: the glow pulses while held at max.
+  if (pulse && f >= 1) inten += CHARGE_PULSE_AMP * (0.5 + 0.5 * Math.sin(fxT * CHARGE_PULSE_FREQ));
+  mat.emissiveIntensity = inten;
 }
 
-function updateFlashes(dt) {
-  // The damaged party flashes red (spec section 11).
+// Charge layers 3-4 (issue #4): mesh-only tremble + eye squint, both driven
+// by the same quadratic fraction as speed. The physics body is untouched:
+// position/quaternion were just synced from the body, so these offsets are
+// purely visual and vanish on the next sync.
+function updateTrembleEyes(f) {
+  const c = Math.min(1, Math.max(0, f));
+  const eyes = playerMesh.userData.eyes;
+  if (eyes) {
+    for (const e of eyes) e.scale.set(1 + 0.2 * c, 1 - EYE_SQUINT * c, 1);
+  }
+  if (!(f > 0)) return;
+  const a = TREMBLE_POS * c;
+  playerMesh.position.x += (Math.sin(fxT * 127.1) + 0.5 * Math.sin(fxT * 311.7)) * 0.5 * a;
+  playerMesh.position.y += (Math.sin(fxT * 149.3 + 1.7) + 0.5 * Math.sin(fxT * 271.9)) * 0.5 * a;
+  playerMesh.position.z += (Math.sin(fxT * 173.7 + 3.1) + 0.5 * Math.sin(fxT * 251.3)) * 0.5 * a;
+  playerMesh.rotateX(Math.sin(fxT * 141.3) * TREMBLE_ROT * c);
+  playerMesh.rotateZ(Math.cos(fxT * 113.7) * TREMBLE_ROT * c);
+}
+
+function updateFlashes(dt, chargeF, windupF) {
+  // The damaged party flashes red (spec section 11): flash wins over glow.
   if (playerFlashT > 0) playerFlashT = Math.max(0, playerFlashT - dt);
   if (bossFlashT > 0) bossFlashT = Math.max(0, bossFlashT - dt);
-  updateFlash(playerMesh, playerFlashT);
-  updateFlash(bossMesh, bossFlashT);
+  const pm = playerMesh.userData.bodyMat;
+  if (playerFlashT > 0) {
+    pm.emissive.setHex(COL_DAMAGE_FLASH);
+    pm.emissiveIntensity = 1;
+  } else if (chargeF > 0) {
+    updateChargeGlow(playerMesh, chargeF, true);
+  } else {
+    pm.emissive.setHex(0x000000);
+    pm.emissiveIntensity = 1;
+  }
+  if (!bossAttached) {
+    const bm = bossMesh.userData.bodyMat;
+    if (bossFlashT > 0) {
+      bm.emissive.setHex(COL_DAMAGE_FLASH);
+      bm.emissiveIntensity = 1;
+    } else if (windupF > 0) {
+      updateChargeGlow(bossMesh, windupF, false);
+    } else {
+      bm.emissive.setHex(0x000000);
+      bm.emissiveIntensity = 1;
+    }
+  }
 }
 
 function updateWorld(dt) {
@@ -647,6 +755,7 @@ function stepSim(dt) {
   if (phase !== 'playing') return;
   if (charging) holdTime += dt;
   fightClock += dt;
+  fxT += dt;
 
   stepper.step(dt);
   if (pendingCombat !== null) {
@@ -681,7 +790,17 @@ function stepSim(dt) {
 
   updateSquash(dt);
   updateBossSquash(dt);
-  updateFlashes(dt);
+  // Charge feedback (issue #4): every layer reads the same quadratic
+  // fraction that sets flick speed, so the visuals never lie about power.
+  const chargeF = charging ? chargeFraction(holdTime, FULL_CHARGE_TIME) : 0;
+  const windupF =
+    !bossAttached && fightActive && bossState === 'windup'
+      ? Math.min(1, bossT / WINDUP_DURATION)
+      : 0;
+  playerMotes.frame(dt, charging ? chargeF : null);
+  bossMotes.frame(dt, windupF > 0 ? windupF : null);
+  updateTrembleEyes(chargeF);
+  updateFlashes(dt, chargeF, windupF);
 }
 
 function frame(now) {

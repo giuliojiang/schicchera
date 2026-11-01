@@ -1867,11 +1867,14 @@ export function buildPlayerMesh() {
   g.add(cube);
   g.userData.bodyMat = cube.material; // damage flash target (spec section 11)
   const eyeMat = matte(COL_EYE, { roughness: 0.8 });
+  const eyes = [];
   for (const ex of [-0.2, 0.2]) {
     const eye = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.24, 0.06), eyeMat);
     eye.position.set(ex, 0.1, s / 2 + 0.01);
     g.add(eye);
+    eyes.push(eye);
   }
+  g.userData.eyes = eyes; // squint targets (issue #4: eyes narrow with charge)
   // Cream trim band so the roll direction reads at a glance.
   const trim = new THREE.Mesh(
     new THREE.BoxGeometry(s + 0.02, 0.14, s + 0.02),
@@ -1879,7 +1882,8 @@ export function buildPlayerMesh() {
   );
   trim.position.set(0, -0.28, 0);
   g.add(trim);
-  // Proxy scale like a Mesh so squash-and-stretch keeps working on the group.
+  // The group scale carries the release stretch pop (issue #4 keeps it as
+  // the launch beat); there is no squash during charge.
   return g;
 }
 
