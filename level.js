@@ -1,6 +1,7 @@
 // Three.js environment: 5 zones, props, water/lava, player mesh, weapons.
 // Primitives only, flat-shaded matte. Visuals match physics.js shapes.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {
   ANCHOR,
   ARCH,
@@ -1855,7 +1856,69 @@ export function buildLevel(scene) {
 }
 
 export function buildPlayerMesh() {
-  // Cube character with a simple face: reads as a character, not a crate.
+  // Cubebot: the Blender character (blend/cubebot.glb) replaces the old
+  // placeholder cube. The file loads async; the group returns immediately so
+  // physics, motes, and weapons can parent to it, and the model fills in on
+  // arrival (userData.bodyMat/eyes land with it; readers must tolerate them
+  // missing until then). Falls back to the legacy cube if loading fails.
+  const g = new THREE.Group();
+  new GLTFLoader().load(
+    CUBEBOT_URL,
+    (gltf) => wireCubebot(g, gltf.scene),
+    undefined,
+    () => {
+      const legacy = buildLegacyPlayerMesh();
+      g.add(legacy);
+      g.userData.bodyMat = legacy.userData.bodyMat;
+      g.userData.eyes = legacy.userData.eyes;
+    }
+  );
+  // The group scale carries the release stretch pop (issue #4 keeps it as
+  // the launch beat); there is no squash during charge.
+  return g;
+}
+
+// Blender source of the character. Body spans exactly +-1 on every axis
+// (measured), so x0.5 normalizes it onto the 1-unit physics cube. Face and
+// eyes look down +Z; the three dark socket plates (side pair + mouth) take
+// the weapons. Textures and materials come from the file.
+const CUBEBOT_URL = './blend/cubebot.glb';
+const CUBEBOT_SCALE = PLAYER_SIZE / 2;
+
+function wireCubebot(g, model) {
+  model.scale.setScalar(CUBEBOT_SCALE);
+  const pivots = [];
+  model.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (m && m.name === 'Material.001') g.userData.bodyMat = m; // flash/glow target (§11)
+      if (m && (m.name === 'eyes' || m.name === 'eyehighlight')) pivots.push(o);
+    }
+  });
+  // Squint pivots (issue #4 layer 4): the eye prims merge both eyes into one
+  // mesh each, so narrow each about its own centroid via a pivot group.
+  // worldToLocal (load-time only): the group may sit anywhere when the file
+  // resolves, but the pivot must be placed in the mesh parent's space.
+  const eyes = [];
+  for (const mesh of pivots) {
+    const cWorld = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+    const c = mesh.parent.worldToLocal(cWorld.clone());
+    const pivot = new THREE.Group();
+    pivot.position.copy(c);
+    mesh.parent.add(pivot);
+    pivot.add(mesh);
+    mesh.position.set(-c.x, -c.y, -c.z);
+    eyes.push(pivot);
+  }
+  if (eyes.length > 0) g.userData.eyes = eyes; // squint targets
+  g.add(model);
+}
+
+function buildLegacyPlayerMesh() {
+  // Placeholder cube, kept as the load-failure fallback only.
   const g = new THREE.Group();
   const s = PLAYER_SIZE;
   const cube = new THREE.Mesh(
@@ -1882,8 +1945,6 @@ export function buildPlayerMesh() {
   );
   trim.position.set(0, -0.28, 0);
   g.add(trim);
-  // The group scale carries the release stretch pop (issue #4 keeps it as
-  // the launch beat); there is no squash during charge.
   return g;
 }
 
@@ -1986,7 +2047,7 @@ export function attachWeapon(THREE_NS, CANNON_NS, playerMesh, playerBody, id) {
   const { group } = buildWeaponMesh(id);
   const a = ANCHOR[id];
   group.position.set(a.pos[0], a.pos[1], a.pos[2]);
-  if (id === 'sword') group.rotation.y = Math.PI; // blade points outward
+  group.rotation.set(a.rot[0], a.rot[1], a.rot[2]); // blades outward, hammer head-forward
   for (const m of group.children) {
     if (m.material && 'emissiveIntensity' in m.material) m.material.emissiveIntensity = 0.12;
   }

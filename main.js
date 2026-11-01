@@ -452,7 +452,7 @@ function winFight() {
   streaks.hide();
   bossLines.hide();
   // The celebration shows the loaded character, no fx: reset both glows.
-  playerMesh.userData.bodyMat.emissive.setHex(0x000000);
+  if (playerMesh.userData.bodyMat) playerMesh.userData.bodyMat.emissive.setHex(0x000000);
   bossMesh.userData.bodyMat.emissive.setHex(0x000000);
   stopBossWindup();
   world.removeBody(bossBody);
@@ -679,6 +679,7 @@ function updateBossSquash(dt) {
 // glint. Red is reserved for the damage flash and never appears here.
 function updateChargeGlow(mesh, f, pulse) {
   const mat = mesh.userData.bodyMat;
+  if (!mat) return; // cubebot model still loading: nothing to glow yet
   mat.emissive.copy(GLOW_LOW).lerp(GLOW_HIGH, Math.min(1, f));
   let inten = CHARGE_GLOW_MAX * Math.min(1, f);
   // Full charge is unmistakable: the glow pulses while held at max.
@@ -710,14 +711,16 @@ function updateFlashes(dt, chargeF, windupF) {
   if (playerFlashT > 0) playerFlashT = Math.max(0, playerFlashT - dt);
   if (bossFlashT > 0) bossFlashT = Math.max(0, bossFlashT - dt);
   const pm = playerMesh.userData.bodyMat;
-  if (playerFlashT > 0) {
-    pm.emissive.setHex(COL_DAMAGE_FLASH);
-    pm.emissiveIntensity = 1;
-  } else if (chargeF > 0) {
-    updateChargeGlow(playerMesh, chargeF, true);
-  } else {
-    pm.emissive.setHex(0x000000);
-    pm.emissiveIntensity = 1;
+  if (pm) { // missing until the cubebot model loads; boss block below still runs
+    if (playerFlashT > 0) {
+      pm.emissive.setHex(COL_DAMAGE_FLASH);
+      pm.emissiveIntensity = 1;
+    } else if (chargeF > 0) {
+      updateChargeGlow(playerMesh, chargeF, true);
+    } else {
+      pm.emissive.setHex(0x000000);
+      pm.emissiveIntensity = 1;
+    }
   }
   if (!bossAttached) {
     const bm = bossMesh.userData.bodyMat;

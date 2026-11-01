@@ -554,11 +554,15 @@ export const BEACH_SHELL_SEED = 21;
 export const BEACH_TUFT_SEED = 22;
 export const BEACH_TUFTS_PER_SHELF = [10, 8, 6];
 
-// Attached-weapon anchors on the cube (visual offsets; colliders match).
+// Attached-weapon anchors on cubebot (visual offsets; colliders match).
+// Measured from blend/cubebot.glb (body normalized x0.5): the blades plug the
+// dark side socket plates (right = dagger, left = sword, mirrored as before),
+// the hammer lies head-forward out of the mouth socket plate. rot is the
+// visual euler applied to the weapon group.
 export const ANCHOR = {
-  dagger: { pos: [0.62, 0, 0], collider: [0.7, 0, 0], half: [0.42, 0.13, 0.07] },
-  sword: { pos: [-0.78, 0, 0], collider: [-0.9, 0, 0], half: [0.65, 0.15, 0.08] },
-  hammer: { pos: [0, 0.72, 0], collider: [0, 0.72, 0], half: [0.2, 0.5, 0.2] },
+  dagger: { pos: [0.59, 0.13, -0.04], collider: [0.7, 0.13, -0.04], half: [0.42, 0.13, 0.07], rot: [0, 0, 0] },
+  sword: { pos: [-0.59, -0.06, -0.03], collider: [-0.9, -0.06, -0.03], half: [0.65, 0.15, 0.08], rot: [0, Math.PI, 0] },
+  hammer: { pos: [0.12, -0.19, 0.35], collider: [0.12, -0.19, 0.35], half: [0.2, 0.2, 0.5], rot: [Math.PI / 2, 0, 0] },
 };
 // Victory anchor: the boss ball rides on the back (-Z, opposite the face).
 // Raised so its bottom sits ~flush with the cube's bottom.

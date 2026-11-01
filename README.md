@@ -7,7 +7,8 @@ Spec: [issue #1](https://github.com/giuliojiang/schicchera/issues/1)
 
 ## Current state: movement core + world
 
-Cube character with a face, orbit-to-aim follow camera, charge-and-flick movement
+Cubebot character (`blend/cubebot.glb`, async load with legacy-cube fallback),
+orbit-to-aim follow camera, charge-and-flick movement
 (quadratic charge, additive velocity, speed clamp), ground/air drag switching,
 fixed-timestep physics, full hub-and-spoke world (village hub, beach, forest,
 mountain pass, volcanic crater arena), dressed village (7 huts, plaza, props, pier,
