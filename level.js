@@ -862,6 +862,11 @@ function buildVillageMassing(scene) {
     // Roof cap band: long shadow line along the top.
     part(GEO.box, mat, w + 0.2, 0.3, t + 0.2, 0, h + 0.15, 0, 0, 0, 0, g)
       .userData.blocker = true;
+    // Rooftop setback tier: Habitat-style second step (the collider covers
+    // its height over the full footprint, conservatively).
+    part(GEO.box, mat, w * 0.55, 2.5, t * 0.75,
+      (bi % 2 === 0 ? 1 : -1) * w * 0.15, h + 1.25, 0, 0, 0, 0, g)
+      .userData.blocker = true;
     // Ribbon window strips on both long faces + vertical dividing piers.
     for (const fz of [-t / 2, t / 2]) {
       for (const wy of [2.8, 5.2, 7.4]) {

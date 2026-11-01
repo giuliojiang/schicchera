@@ -12,10 +12,11 @@ orbit-to-aim follow camera with raycast collision pull-in, charge-and-flick move
 (quadratic charge, additive velocity, speed clamp), ground/air drag switching,
 fixed-timestep physics, full hub-and-spoke world (village hub, beach, forest,
 mountain pass, volcanic crater arena), Brutalist village (7 concrete monoliths
-13-19x cube height with base reveals, vertical slots and roof bulkheads, gate
-pylons, landmark towers — one Blender-modelled hero tower — east/shore-road
-canyon bars, channeled stream, slab bridge, monolith pedestal, plaza, props,
-pier, gates; Blender-baked board-formed concrete), terraced beach
+13-20x cube height with base reveals, vertical slots and roof bulkheads, gate
+pylons and street towers, landmark towers — one Blender-modelled hero tower —
+full-length east/shore-road canyon bars with setback tiers, channeled stream,
+slab bridge, monolith pedestal, plaza, props, pier, gates; Blender-baked
+board-formed concrete), terraced beach
 (layered shelves, switchback ramps, gentle/steep fork,
 sword cove, shore dressing, pier), navigable forest grove (thicket walls,
 4 clearings, winding paths, slalom shortcut, pond, lookout hill, giant tree,

@@ -297,8 +297,8 @@ export const ROCKS = [
 export const HUTS = [
   [-13, 12.5, 2.03, 0, 0, 14, 1], // west bridge block
   [13, 12.5, -2.03, 1, 1, 13, 0], // east bridge block
-  [-13, -12, 0.83, 1, 2, 19, 1], // plaza block (tallest)
-  [13, -12, -0.83, 0, 1, 18, 0], // plaza block (tallest)
+  [-13, -12, 0.83, 1, 2, 20, 1], // plaza block (tallest)
+  [13, -12, -0.83, 0, 1, 19, 0], // plaza block (tallest)
   [-6, -14, 1.45, 0, 0, 14, 0], // north road block
   [11.5, 4.5, 3.06, 1, 2, 15, 1], // east road block (clear of the plaza camera orbit)
   [-14, -4.5, 0.15, 0, 1, 13, 0], // west road block
@@ -314,11 +314,15 @@ export const VILLAGE_TOWERS = [
   [-11, -18, 3, 18], // north-west landmark (hero GLB)
   [17, 16.5, 2.8, 17], // south-east landmark (merges with the H2 block)
   [-17.5, 16.5, 2.8, 15], // south-west landmark (frames the west bridge)
+  [-4.5, -8, 2.4, 14], // north-road west gate tower
+  [4.5, -8, 2.4, 14], // north-road east gate tower
 ];
-// Bars: [cx, cz, lengthX, thickZ, height]. They wall the east and shore
+// Bars: [cx, cz, lengthX, thickZ, slab height]. They wall the east and shore
 // roads into canyons; the north-east bar fuses with H6 as stepped massing.
+// Each bar carries a rooftop setback tier (+2.5, smaller footprint); the
+// collider covers the full tier height conservatively.
 export const VILLAGE_BARS = [
-  [11.5, 4.6, 10, 2.4, 9], // north of the east road
+  [13, 4.6, 13, 2.4, 9], // north of the east road (full-length street wall)
   [12, -4.6, 6, 2.4, 10], // south of the east road
   [-11.5, 4.6, 9, 2.4, 9], // north of the shore road
 ];

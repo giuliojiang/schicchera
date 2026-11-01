@@ -276,7 +276,7 @@ export function createStaticLevel(world) {
     addBox(x, h / 2, z, s, h, s);
   }
   for (const [cx, cz, w, t, h] of VILLAGE_BARS) {
-    addBox(cx, h / 2, cz, w, h, t);
+    addBox(cx, (h + 2.5) / 2, cz, w, h + 2.5, t); // +2.5 rooftop setback tier
   }
 
   // Village props. Every blocking prop has a collider matching its visual.
