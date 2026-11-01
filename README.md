@@ -18,7 +18,8 @@ hammer grove, stream with bridge and stepping stones), collectible weapons
 that attach with mass + colliders, bump-attacking ball boss with a
 momentum-rules fight (wind-up telegraphs, piece loss, win/lose icon screens,
 victory boss-ball attach), per-zone fog, synthesized audio,
-`?debug=1` state bridge. No build step.
+`?debug=1` state bridge, Futurism force lines (ghost echoes, flick streaks,
+wind-up lines, roll/whoosh noise — visual-only, past motion only). No build step.
 
 ## Run it
 

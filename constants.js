@@ -83,6 +83,33 @@ export const TREMBLE_ROT = 0.03; // rad, max mesh-only rotation jitter
 export const EYE_SQUINT = 0.7; // max eye Y compression at full charge
 export const CHARGE_MOTE_TINT = 0xffe9b0; // warm gold-white motes (never red)
 
+// Futurism lines of force (issue #10). All visual-only: thresholds decide when
+// an effect appears, never how the game plays. Gold-white family only; red
+// stays reserved for the damage flash and the lava. Past motion only: nothing
+// here may appear before a release or indicate a future direction.
+export const GHOST_MIN_SPEED = 4; // u/s, echoes only above this speed
+export const GHOST_INTERVAL = 0.08; // s, snapshot cadence while fast
+export const GHOST_COUNT = 6; // pool size / trail length
+export const GHOST_FADE = 0.5; // s, echo lifetime
+export const GHOST_OPACITY_MAX = 0.22; // newest echo opacity; oldest fades to 0
+export const STREAK_COUNT = 12; // lines per release burst
+export const STREAK_LEN_MIN = 0.5; // units, per-streak variation floor
+export const STREAK_LEN_MAX = 1.0; // units, per-streak variation ceiling
+export const STREAK_FADE = 0.3; // s, release burst lifetime
+export const STREAK_POOL = 40; // shared release + high-speed pool (fixed)
+export const STREAK_THICK = 0.05; // units, thin boxes stay visible at distance
+export const STREAK_OPACITY = 0.55; // release burst base opacity
+export const SPEED_STREAK_MIN = 8; // u/s, higher bar than the ghost echoes
+export const SPEED_STREAK_LIFE = 0.25; // s, per-streak lifetime while fast
+export const SPEED_STREAK_OPACITY = 0.2; // faint shimmer, never obscuring
+export const SPEED_STREAK_RATE = 4; // spawns/s per u/s above the threshold
+export const BOSS_LINES = 14; // wind-up force-line pool (fixed)
+export const BOSS_LINE_LEN_MIN = 0.5; // units
+export const BOSS_LINE_LEN_MAX = 0.9; // units
+export const BOSS_LINE_OPACITY = 0.5; // full wind-up ceiling; pulses below it
+export const ROLL_NOISE_MIN_SPEED = 4; // u/s, bed silent below this
+export const ROLL_NOISE_MAX = 0.025; // gain ceiling: garnish, never masks cues
+
 // Audio tuning.
 export const CHARGE_TONE_BASE = 150; // Hz at zero charge
 export const CHARGE_TONE_TOP = 620; // Hz at full charge

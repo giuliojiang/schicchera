@@ -255,6 +255,84 @@ export function playVictory() {
   }
 }
 
+// Russolo audio nod (issue #10 §7, optional stretch): velocity-tied noise.
+// Shared white-noise buffer, built lazily. All gains sit below the cues
+// (charge tone, wind-up, damage, pickup): garnish, never masking.
+let noiseBuf = null;
+function getNoiseBuf(ac) {
+  if (noiseBuf) return noiseBuf;
+  try {
+    const len = Math.floor(ac.sampleRate * 1);
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    noiseBuf = buf;
+  } catch {
+    noiseBuf = null;
+  }
+  return noiseBuf;
+}
+
+// Flick whoosh: short filtered-noise burst on release, through the existing
+// synthesized setup. No files, no samples.
+export function playWhoosh(strength01) {
+  const ac = ensureAudio();
+  if (!ac) return;
+  const buf = getNoiseBuf(ac);
+  if (!buf) return;
+  try {
+    const t = ac.currentTime;
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.9 + 0.4 * Math.min(1, Math.max(0, strength01));
+    const filt = ac.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(900 + 1400 * strength01, t);
+    filt.frequency.exponentialRampToValueAtTime(320, t + 0.22);
+    filt.Q.value = 0.8;
+    const gain = ac.createGain();
+    const peak = 0.04 + 0.08 * Math.min(1, Math.max(0, strength01));
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(peak, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    src.connect(filt).connect(gain).connect(ac.destination);
+    src.start(t);
+    src.stop(t + 0.3);
+  } catch {
+    /* ignore */
+  }
+}
+
+// Rolling noise bed: continuous low filtered noise, gain tied to speed.
+// Cuttable: if it ever masks a cue in playtesting, delete the call site.
+let rollSrc = null;
+let rollGain = null;
+export function updateRollNoise(speed, minSpeed, maxGain) {
+  const ac = ctx || ensureAudio();
+  if (!ac) return;
+  try {
+    if (!rollSrc || !rollGain) {
+      const buf = getNoiseBuf(ac);
+      if (!buf) return;
+      rollSrc = ac.createBufferSource();
+      rollSrc.buffer = buf;
+      rollSrc.loop = true;
+      const filt = ac.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = 420;
+      rollGain = ac.createGain();
+      rollGain.gain.value = 0.0001;
+      rollSrc.connect(filt).connect(rollGain).connect(ac.destination);
+      rollSrc.start();
+    }
+    const over = Math.max(0, speed - minSpeed);
+    const target = Math.min(maxGain, (over / 16) * maxGain);
+    rollGain.gain.setTargetAtTime(Math.max(0.0001, target), ac.currentTime, 0.1);
+  } catch {
+    /* ignore */
+  }
+}
+
 // Collision thud, volume scaled by impact velocity.
 export function playThud(impact) {
   const ac = ctx || ensureAudio();

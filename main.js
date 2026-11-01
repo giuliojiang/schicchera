@@ -36,10 +36,20 @@ import {
   CHARGE_MOTES,
   CHARGE_PULSE_AMP,
   CHARGE_PULSE_FREQ,
+  BOSS_LINES,
+  BOSS_LINE_LEN_MAX,
+  BOSS_LINE_LEN_MIN,
+  BOSS_LINE_OPACITY,
+  BOSS_RADIUS,
   COL_DAMAGE_FLASH,
   COMBAT_COOLDOWN,
   DAMAGE_FLASH_TIME,
   EYE_SQUINT,
+  GHOST_COUNT,
+  GHOST_FADE,
+  GHOST_INTERVAL,
+  GHOST_MIN_SPEED,
+  GHOST_OPACITY_MAX,
   FOG_ARENA,
   FOG_BEACH,
   FOG_DENSITY,
@@ -55,7 +65,21 @@ import {
   PICKUP_TOUCH_DIST,
   PICKUPS,
   PLAYER_MAX_FLICK_SPEED,
+  PLAYER_SIZE,
+  ROLL_NOISE_MAX,
+  ROLL_NOISE_MIN_SPEED,
   SPEED_CLAMP,
+  SPEED_STREAK_LIFE,
+  SPEED_STREAK_MIN,
+  SPEED_STREAK_OPACITY,
+  SPEED_STREAK_RATE,
+  STREAK_COUNT,
+  STREAK_FADE,
+  STREAK_LEN_MAX,
+  STREAK_LEN_MIN,
+  STREAK_OPACITY,
+  STREAK_POOL,
+  STREAK_THICK,
   SQUASH_XZ,
   SQUASH_Y,
   SUN_OFFSET,
@@ -69,6 +93,7 @@ import {
   ZONE_VILLAGE,
 } from './constants.js';
 import { createMotes } from './chargefx.js';
+import { createBossLines, createGhostTrail, createStreakPool } from './futurism.js';
 import {
   applyFlickVelocity,
   bossNext,
@@ -106,11 +131,13 @@ import {
   playPickup,
   playThud,
   playVictory,
+  playWhoosh,
   startBossWindup,
   startCharge,
   stopBossWindup,
   stopCharge,
   updateCharge,
+  updateRollNoise,
 } from './audio.js';
 
 const app = document.getElementById('app');
@@ -183,6 +210,40 @@ const bossMotes = createMotes(THREE, {
   seed: 97,
 });
 bossMesh.add(bossMotes.points);
+
+// Futurism lines of force (issue #10): ghost echoes, release streaks +
+// high-speed shimmer (shared pool), boss wind-up force lines. World-space
+// primitives in the gold-white family, no colliders, visual-only: they read
+// body state every frame and never write it.
+const ghostTrail = createGhostTrail(THREE, {
+  count: GHOST_COUNT,
+  size: PLAYER_SIZE,
+  tint: CHARGE_MOTE_TINT,
+  maxOpacity: GHOST_OPACITY_MAX,
+  fade: GHOST_FADE,
+  interval: GHOST_INTERVAL,
+  minSpeed: GHOST_MIN_SPEED,
+});
+scene.add(ghostTrail.group);
+const streaks = createStreakPool(THREE, {
+  count: STREAK_POOL,
+  tint: CHARGE_MOTE_TINT,
+  thick: STREAK_THICK,
+  seed: 13,
+});
+scene.add(streaks.group);
+const bossLines = createBossLines(THREE, {
+  count: BOSS_LINES,
+  tint: CHARGE_MOTE_TINT,
+  thick: STREAK_THICK,
+  lenMin: BOSS_LINE_LEN_MIN,
+  lenMax: BOSS_LINE_LEN_MAX,
+  maxOpacity: BOSS_LINE_OPACITY,
+  radius: BOSS_RADIUS + 0.35,
+  seed: 29,
+});
+scene.add(bossLines.group);
+let streakAccum = 0; // high-speed spawn debt (rate proportional to speed)
 
 playerBody.addEventListener('collide', (e) => {
   try {
@@ -306,6 +367,22 @@ function releaseFlick() {
   tmpQ.invert();
   tmpBurst.applyQuaternion(tmpQ);
   playerMotes.burst(tmpBurst.x, tmpBurst.y, tmpBurst.z, 3 + 5 * frac);
+  // Futurism release streaks (issue #10 §4): the flick draws its force line,
+  // exactly on release, never during charge. Same gold-white, same moment as
+  // the swarm burst above; the swarm says "energy", the streaks say "where".
+  streaks.burstRelease(
+    playerBody.position.x,
+    playerBody.position.y,
+    playerBody.position.z,
+    dirTmp[0],
+    dirTmp[1],
+    STREAK_COUNT,
+    STREAK_LEN_MIN,
+    STREAK_LEN_MAX,
+    STREAK_FADE,
+    STREAK_OPACITY,
+    0.12 // fan spread, radians: a sheaf, not a ruler line
+  );
   const v = playerBody.velocity;
   const [nx, ny, nz] = applyFlickVelocity(v.x, v.y, v.z, dirTmp[0], dirTmp[1], speed);
   const [cx, cy, cz] = clampSpeed(nx, ny, nz, SPEED_CLAMP);
@@ -314,6 +391,7 @@ function releaseFlick() {
   stretchT = LAUNCH_STRETCH_TIME;
   stopCharge();
   playFlick(frac);
+  playWhoosh(frac); // Russolo nod (issue #10 §7): noise whoosh under the thwip
   holdTime = 0;
 }
 
@@ -370,6 +448,9 @@ function winFight() {
   dropCharge();
   playerMotes.hide();
   bossMotes.hide();
+  ghostTrail.hide();
+  streaks.hide();
+  bossLines.hide();
   // The celebration shows the loaded character, no fx: reset both glows.
   playerMesh.userData.bodyMat.emissive.setHex(0x000000);
   bossMesh.userData.bodyMat.emissive.setHex(0x000000);
@@ -385,6 +466,9 @@ function loseFight() {
   phase = 'lost';
   dropCharge();
   playerMotes.hide();
+  ghostTrail.hide();
+  streaks.hide();
+  bossLines.hide();
   stopBossWindup();
   document.getElementById('gameover').hidden = false;
 }
@@ -799,6 +883,54 @@ function stepSim(dt) {
       : 0;
   playerMotes.frame(dt, charging ? chargeF : null);
   bossMotes.frame(dt, windupF > 0 ? windupF : null);
+  // Futurism lines of force (issue #10): read-only on body state, visual-only.
+  // Ghost echoes (§3) trail past motion above GHOST_MIN_SPEED; high-speed
+  // shimmer (§5) spawns behind the cube above SPEED_STREAK_MIN at a rate
+  // proportional to speed; boss force lines (§6) add to the wind-up telegraph.
+  {
+    const pv = playerBody.velocity;
+    const ps = Math.hypot(pv.x, pv.y, pv.z);
+    const pq = playerBody.quaternion;
+    ghostTrail.frame(
+      dt,
+      playerBody.position.x, playerBody.position.y, playerBody.position.z,
+      pq.x, pq.y, pq.z, pq.w,
+      ps
+    );
+    if (ps > SPEED_STREAK_MIN) {
+      streakAccum += (ps - SPEED_STREAK_MIN) * SPEED_STREAK_RATE * dt;
+      const ix = pv.x / ps;
+      const iy = pv.y / ps;
+      const iz = pv.z / ps;
+      while (streakAccum >= 1) {
+        streakAccum -= 1;
+        const r1 = streaks.random() * 2 - 1;
+        const r2 = streaks.random() * 2 - 1;
+        const r3 = streaks.random();
+        // Spawn behind the cube, line along the motion, faint and short.
+        streaks.spawn(
+          playerBody.position.x - ix * (0.8 + r3 * 0.8) - iz * r1 * 0.3,
+          playerBody.position.y - iy * 0.5 + r2 * 0.3,
+          playerBody.position.z - iz * (0.8 + r3 * 0.8) + ix * r1 * 0.3,
+          ix, iy, iz,
+          STREAK_LEN_MIN + streaks.random() * (STREAK_LEN_MAX - STREAK_LEN_MIN),
+          SPEED_STREAK_LIFE,
+          SPEED_STREAK_OPACITY
+        );
+      }
+    } else if (streakAccum !== 0) {
+      streakAccum = 0;
+    }
+    streaks.frame(dt);
+    bossLines.frame(
+      dt,
+      windupF > 0,
+      bossBody.position.x, bossBody.position.y, bossBody.position.z,
+      windupF,
+      fxT
+    );
+    updateRollNoise(ps, ROLL_NOISE_MIN_SPEED, ROLL_NOISE_MAX);
+  }
   updateTrembleEyes(chargeF);
   updateFlashes(dt, chargeF, windupF);
 }
