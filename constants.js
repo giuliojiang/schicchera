@@ -295,13 +295,13 @@ export const ROCKS = [
 // the tall end; secondary blocks at the low end. bodyTone picks the concrete
 // shade (0 light / 1 dark); roofTone picks the stepped-crown variant.
 export const HUTS = [
-  [-13, 12.5, 2.03, 0, 0, 12, 1], // west bridge block
-  [13, 12.5, -2.03, 1, 1, 11, 0], // east bridge block
-  [-13, -12, 0.83, 1, 2, 17, 1], // plaza block (tallest)
-  [13, -12, -0.83, 0, 1, 16, 0], // plaza block (tallest)
-  [-6, -14, 1.45, 0, 0, 12, 0], // north road block
-  [11.5, 4.5, 3.06, 1, 2, 14, 1], // east road block (clear of the plaza camera orbit)
-  [-14, -4.5, 0.15, 0, 1, 11, 0], // west road block
+  [-13, 12.5, 2.03, 0, 0, 14, 1], // west bridge block
+  [13, 12.5, -2.03, 1, 1, 13, 0], // east bridge block
+  [-13, -12, 0.83, 1, 2, 19, 1], // plaza block (tallest)
+  [13, -12, -0.83, 0, 1, 18, 0], // plaza block (tallest)
+  [-6, -14, 1.45, 0, 0, 14, 0], // north road block
+  [11.5, 4.5, 3.06, 1, 2, 15, 1], // east road block (clear of the plaza camera orbit)
+  [-14, -4.5, 0.15, 0, 1, 13, 0], // west road block
 ];
 // Second-wave massing (deeper rework): slim gate/corner towers and low
 // street-canyon bars. All axis-aligned; every rect is clearance-checked
@@ -309,16 +309,18 @@ export const HUTS = [
 // Towers: [x, z, footprint, height]. Plaza pair frames the north road;
 // corners anchor the map edges.
 export const VILLAGE_TOWERS = [
-  [-7, -18.5, 2.6, 13], // forest-gate west pylon
-  [7.5, -18.5, 2.6, 13], // forest-gate east pylon
-  [-11, -18, 3, 18], // north-west landmark
-  [17, 16.5, 2.8, 16], // south-east landmark (merges with the H2 block)
+  [-7, -18.5, 2.6, 16], // forest-gate west pylon
+  [7.5, -18.5, 2.6, 16], // forest-gate east pylon
+  [-11, -18, 3, 18], // north-west landmark (hero GLB)
+  [17, 16.5, 2.8, 17], // south-east landmark (merges with the H2 block)
+  [-17.5, 16.5, 2.8, 15], // south-west landmark (frames the west bridge)
 ];
-// Bars: [cx, cz, lengthX, thickZ, height]. They wall the east road into a
-// canyon; the north bar fuses with the H6 block as stepped massing.
+// Bars: [cx, cz, lengthX, thickZ, height]. They wall the east and shore
+// roads into canyons; the north-east bar fuses with H6 as stepped massing.
 export const VILLAGE_BARS = [
   [11.5, 4.6, 10, 2.4, 9], // north of the east road
   [12, -4.6, 6, 2.4, 10], // south of the east road
+  [-11.5, 4.6, 9, 2.4, 9], // north of the shore road
 ];
 // Retired by issue #14: the timber/shutter/flowerbox hut dressing is gone.
 // Kept (unused) so the shape of the old spec stays visible in one place.

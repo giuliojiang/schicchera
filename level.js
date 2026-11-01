@@ -764,6 +764,18 @@ function buildHuts(scene) {
     // Monolith slab: full footprint at ground level (the collider matches).
     part(GEO.box, baseMat, bsx, baseH, bsz, 0, baseH / 2, 0, 0, 0, 0, g)
       .userData.blocker = true; // camera raycast blocker (issue #12)
+    // Base reveal: a dark shadow-gap band grounding the slab. Proud by a
+    // hair (no wedge risk, no collider change), reads as a recessed arcade.
+    part(GEO.box, window, bsx + 0.08, 0.6, bsz + 0.08, 0, 0.3, 0, 0, 0, 0, g);
+    // Vertical slot strips, front and back: full-height dark reveals that
+    // pull the eye upward so the slab reads taller. Flanking the grid, never
+    // over it.
+    for (const sz of [fz, -fz]) {
+      for (const sx of [-1.65, 1.65]) {
+        part(GEO.box, window, 0.5, baseH - 3.2, 0.14,
+          sx, 2.2 + (baseH - 3.2) / 2, sz - Math.sign(sz) * 0.02, 0, 0, 0, g);
+      }
+    }
     // Stepped crown: smaller offset box (Habitat-style stacking accent).
     const cxOff = roofKind === 1 ? 0.4 : -0.4;
     part(GEO.box, baseMat, 2.8, crownH, 2.2, cxOff, baseH + crownH / 2, -0.3, 0, 0, 0, g)
@@ -786,6 +798,12 @@ function buildHuts(scene) {
     for (const px of [-1.4, 0, 1.4]) {
       part(GEO.box, baseMat, 0.4, 2.2, 0.4, px, 1.1, fz + 0.35, 0, 0, 0, g);
     }
+    // Stair bulkhead on the crown: a small rooftop box breaking the
+    // skyline (classic roofline clutter, sells the scale). Above reach and
+    // above the collider: visual-only, untagged.
+    part(GEO.box, baseMat, 1.2, 1.0, 1.0,
+      cxOff + (hi % 2 === 0 ? 0.5 : -0.5), totalH + 0.5, -0.3 + ((hi % 3) - 1) * 0.4,
+      0, 0, 0, g);
     // Roof-terrace bushes on alternating blocks (softening green).
     if (hi % 2 === 0) {
       part(GEO.ico, M(COL_BUSH[hi % 3]), 0.5, 0.38, 0.5,
