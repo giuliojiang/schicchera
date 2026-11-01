@@ -1005,9 +1005,11 @@ document.getElementById('replayBtn').addEventListener('click', () => location.re
 
 // Sound toggle (issue #11 §3): one icon button mutes music and SFX together.
 function syncMuteBtn() {
+  // style.display, not the hidden property: these are SVG elements and the
+  // hidden IDL (HTMLElement-only) is a no-op expando on them.
   const off = isMuted();
-  document.getElementById('soundOnIcon').hidden = off;
-  document.getElementById('soundOffIcon').hidden = !off;
+  document.getElementById('soundOnIcon').style.display = off ? 'none' : 'inline';
+  document.getElementById('soundOffIcon').style.display = off ? 'inline' : 'none';
 }
 document.getElementById('muteBtn').addEventListener('click', () => {
   unlockAudioAndMusic();
