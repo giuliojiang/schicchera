@@ -40,6 +40,11 @@ export const CAMERA_HEIGHT_RATE = 2; // 1/s smoothed-ground easing while grounde
 export const CAMERA_LOOKAHEAD_TIME = 0.15; // s of smoothed velocity added to gaze (issue #7)
 export const CAMERA_LOOKAHEAD_MAX = 1.5; // units, gaze lookahead clamp (issue #7)
 export const CAMERA_VEL_RATE = 6; // 1/s low-pass on lookahead velocity (issue #7)
+export const CAMERA_COLLISION_MARGIN = 0.3; // camera stops this far short of a blocker (issue #12)
+export const CAMERA_MIN_DISTANCE = 1.5; // camera never closer; stays out of the character (issue #12)
+export const CAMERA_DISTANCE_RATE = 4; // 1/s smoothed distance toward the raycast target (issue #12)
+export const CAMERA_NEAR = 0.1; // camera.near; avoids slicing into a wall when pulled close (issue #12)
+export const CAMERA_RAY_ORIGIN_HEIGHT = 0.5; // ray starts above the character center (issue #12)
 export const ORBIT_SPEED = 2.2; // rad/s for A/D
 
 export const DAMAGE_FLASH_TIME = 0.3; // s

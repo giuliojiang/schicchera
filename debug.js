@@ -53,6 +53,8 @@ export function initDebug(ctx) {
       orbitAngle: +s.orbitAngle.toFixed(4),
       cam: s.cam,
       anchor: s.anchor,
+      camDist: s.camDist,
+      camBlockers: s.camBlockers,
       frames: s.frames,
       lastDtMs: +(s.lastDt * 1000).toFixed(2),
       screen: bodyScreen(playerBody),

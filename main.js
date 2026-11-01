@@ -18,12 +18,17 @@ import {
   BOSS_WINDUP_DAMP,
   BUMP_INTERVAL,
   CAMERA_ANCHOR_RATE,
+  CAMERA_COLLISION_MARGIN,
   CAMERA_DEADZONE,
   CAMERA_DISTANCE,
+  CAMERA_DISTANCE_RATE,
   CAMERA_HEIGHT,
   CAMERA_HEIGHT_RATE,
   CAMERA_LOOKAHEAD_MAX,
   CAMERA_LOOKAHEAD_TIME,
+  CAMERA_MIN_DISTANCE,
+  CAMERA_NEAR,
+  CAMERA_RAY_ORIGIN_HEIGHT,
   CAMERA_VEL_RATE,
   CHARGE_BURST_TIME,
   CHARGE_GLOW_HIGH,
@@ -176,6 +181,18 @@ scene.fog = new THREE.FogExp2(FOG_VILLAGE, FOG_DENSITY);
 const { sun } = buildLights(scene);
 const { lavaMats, crackMats, gulls, clouds, fireflies, fireflyBase, embers, emberBase, smoke, smokeBase } =
   buildLevel(scene);
+
+// Camera collision blockers (issue #12): explicit mesh list, built once per
+// level load. Level geometry is static, so world matrices are frozen here and
+// the per-frame raycast never pays for a scene-graph update. Excluded by
+// construction (never tagged in level.js): the player + weapons (added below,
+// after this), the boss ball, pickups, pedestals, lava, ground slabs, thicket
+// trunks, fences, and bridge railings.
+const cameraBlockers = [];
+scene.traverse((o) => {
+  if (o.isMesh && o.userData.blocker) cameraBlockers.push(o);
+});
+scene.updateMatrixWorld(true);
 const playerMesh = buildPlayerMesh();
 scene.add(playerMesh);
 
@@ -191,7 +208,7 @@ const pieces = [];
 const camera = new THREE.PerspectiveCamera(
   60,
   window.innerWidth / window.innerHeight,
-  0.1,
+  CAMERA_NEAR,
   400
 );
 
@@ -615,6 +632,12 @@ let anchorZ = playerBody.position.z;
 let smoothGround = playerBody.position.y;
 let smoothVelX = 0;
 let smoothVelZ = 0;
+// Collision pull-in (issue #12): smoothed distance toward the raycast target.
+let camDist = CAMERA_DISTANCE;
+const camRay = new THREE.Raycaster();
+camRay.far = CAMERA_DISTANCE;
+const rayOrigin = new THREE.Vector3();
+const rayDir = new THREE.Vector3();
 
 function updateCamera(dt) {
   // Yaw: direct, always. Any lag here would mis-aim flicks.
@@ -652,10 +675,32 @@ function updateCamera(dt) {
     lhZ *= s;
   }
 
+  // Collision (issue #12): raycast from the character toward the desired
+  // camera position; a blocker shortens the target distance, smoothed at
+  // CAMERA_DISTANCE_RATE so the camera glides instead of popping. Gaze and
+  // yaw are untouched: this changes framing distance only, never aim.
+  let targetDist = CAMERA_DISTANCE;
+  rayOrigin.set(px, py + CAMERA_RAY_ORIGIN_HEIGHT, pz);
+  rayDir.set(
+    anchorX + Math.sin(orbitAngle) * CAMERA_DISTANCE - rayOrigin.x,
+    smoothGround + CAMERA_HEIGHT - rayOrigin.y,
+    anchorZ + Math.cos(orbitAngle) * CAMERA_DISTANCE - rayOrigin.z
+  );
+  const rayLen = rayDir.length();
+  if (rayLen > 1e-4 && cameraBlockers.length > 0) {
+    rayDir.divideScalar(rayLen);
+    camRay.set(rayOrigin, rayDir);
+    const hits = camRay.intersectObjects(cameraBlockers, false);
+    if (hits.length > 0) {
+      targetDist = Math.max(hits[0].distance - CAMERA_COLLISION_MARGIN, CAMERA_MIN_DISTANCE);
+    }
+  }
+  camDist += (targetDist - camDist) * (1 - Math.exp(-CAMERA_DISTANCE_RATE * dt));
+
   camera.position.set(
-    anchorX + Math.sin(orbitAngle) * CAMERA_DISTANCE,
+    anchorX + Math.sin(orbitAngle) * camDist,
     smoothGround + CAMERA_HEIGHT,
-    anchorZ + Math.cos(orbitAngle) * CAMERA_DISTANCE
+    anchorZ + Math.cos(orbitAngle) * camDist
   );
   lookTarget.set(anchorX + lhX, smoothGround, anchorZ + lhZ);
   camera.lookAt(lookTarget);
@@ -1049,6 +1094,8 @@ if (params.has('debug') || params.has('autoplay')) {
           orbitAngle,
           cam: [+camera.position.x.toFixed(4), +camera.position.y.toFixed(4), +camera.position.z.toFixed(4)],
           anchor: [+anchorX.toFixed(4), +smoothGround.toFixed(4), +anchorZ.toFixed(4)],
+          camDist: +camDist.toFixed(4),
+          camBlockers: cameraBlockers.length,
           zone,
           pieces: [...pieces],
           pickups: pickups.map((p) => ({ id: p.id, taken: p.taken })),

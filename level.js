@@ -511,7 +511,9 @@ function buildWalls(scene) {
   };
   for (const [x, y, z, sx, sy, sz, style] of WALLS) {
     if (style === 'none') continue; // invisible shoreline wall
-    scene.add(box(sx, sy, sz, mats[style], x, y, z));
+    const m = box(sx, sy, sz, mats[style], x, y, z);
+    m.userData.blocker = true; // camera raycast blocker (issue #12)
+    scene.add(m);
   }
 }
 
@@ -592,6 +594,7 @@ function buildRocks(scene) {
     m.rotation.y = (x * 1.7 + z * 2.3) % Math.PI;
     m.castShadow = true;
     m.receiveShadow = true;
+    m.userData.blocker = true; // camera raycast blocker (issue #12)
     scene.add(m);
   }
 }
@@ -614,17 +617,20 @@ function buildHuts(scene) {
     const bsy = bodyH || HUT_BODY[1];
     const bsz = HUT_BODY[2];
     const small = bsy < 2.2;
-    part(GEO.box, bodyMats[bodyTone], bsx, bsy, bsz, 0, bsy / 2, 0, 0, 0, 0, g);
+    part(GEO.box, bodyMats[bodyTone], bsx, bsy, bsz, 0, bsy / 2, 0, 0, 0, 0, g)
+      .userData.blocker = true; // camera raycast blocker (issue #12)
 
     // Roof: pyramid or pitched gable.
     if (roofKind === 1) {
       const roof = part(GABLE_GEO, roofMats[roofTone], 1, 0.45, 1, 0, bsy + 0.585, 0, 0, 0, 0, g);
       roof.castShadow = true;
+      roof.userData.blocker = true; // camera raycast blocker (issue #12)
       part(GEO.box, frameMat, 5.2, 0.12, 0.4, 0, bsy + 1.75, 0, 0, 0, 0, g); // ridge cap
     } else {
       const roofR = Math.hypot(bsx / 2, bsz / 2) + 0.3;
       const roofH = small ? 1.4 : 1.8;
-      part(GEO.cone4, roofMats[roofTone], roofR, roofH, roofR, 0, bsy + roofH / 2, 0, 0, Math.PI / 4, 0, g);
+      part(GEO.cone4, roofMats[roofTone], roofR, roofH, roofR, 0, bsy + roofH / 2, 0, 0, Math.PI / 4, 0, g)
+        .userData.blocker = true; // camera raycast blocker (issue #12)
     }
 
     // Door upgrade on every hut: frame + wood panel + step stone.
@@ -743,11 +749,15 @@ function buildArch(scene) {
   const mat = matte(COL_ARCH);
   const darkMat = matte(0x6e6b64); // one pillar slightly darker stone
   const ps = ARCH.pillarSize;
-  scene.add(box(ps, ARCH.pillarH, ps, darkMat, ARCH.x, ARCH.pillarH / 2, -ARCH.pillarGap));
-  scene.add(box(ps, ARCH.pillarH, ps, mat, ARCH.x, ARCH.pillarH / 2, ARCH.pillarGap));
-  scene.add(
-    box(ps, ARCH.lintelH, ARCH.pillarGap * 2 + ps, mat, ARCH.x, ARCH.pillarH + ARCH.lintelH / 2, 0)
-  );
+  const archP1 = box(ps, ARCH.pillarH, ps, darkMat, ARCH.x, ARCH.pillarH / 2, -ARCH.pillarGap);
+  archP1.userData.blocker = true; // pass arch: camera raycast blocker (issue #12)
+  scene.add(archP1);
+  const archP2 = box(ps, ARCH.pillarH, ps, mat, ARCH.x, ARCH.pillarH / 2, ARCH.pillarGap);
+  archP2.userData.blocker = true; // pass arch: camera raycast blocker (issue #12)
+  scene.add(archP2);
+  const archL = box(ps, ARCH.lintelH, ARCH.pillarGap * 2 + ps, mat, ARCH.x, ARCH.pillarH + ARCH.lintelH / 2, 0);
+  archL.userData.blocker = true; // pass arch: camera raycast blocker (issue #12)
+  scene.add(archL);
   // Moss patches on the pillars + obsidian shards at the base (visual).
   const moss = M(COL_BUSH[0]);
   flatPart(GEO.box, moss, 0.06, 0.7, 0.5, ARCH.x - ps / 2 - 0.01, 1.1, -ARCH.pillarGap, 0, scene);
@@ -882,7 +892,8 @@ function buildArenaRing(scene) {
   });
   for (const s of ring.kept) {
     part(GEO.box, M(COL_WALL_ROCK), s.len, ARENA_RING_H, ARENA_RING_T,
-      s.x, ARENA_RING_H / 2, s.z, 0, s.rotY, 0, scene);
+      s.x, ARENA_RING_H / 2, s.z, 0, s.rotY, 0, scene)
+      .userData.blocker = true; // camera raycast blocker (issue #12)
   }
   const back = arenaRingLayout({
     cx: ARENA_CENTER[0],
@@ -894,7 +905,8 @@ function buildArenaRing(scene) {
   });
   for (const s of back.kept) {
     part(GEO.box, M(COL_OBSIDIAN), s.len, ARENA_BACKDROP_H, ARENA_BACKDROP_T,
-      s.x, ARENA_BACKDROP_H / 2, s.z, 0, s.rotY, 0, scene);
+      s.x, ARENA_BACKDROP_H / 2, s.z, 0, s.rotY, 0, scene)
+      .userData.blocker = true; // camera raycast blocker (issue #12)
   }
 }
 
@@ -906,13 +918,15 @@ function rockPile(scene, rng, cx, cz, { count, chain, baseSize }) {
   const rocks = [];
   function addRock(s, x, y, z) {
     const tone = tones[Math.floor(rng() * tones.length)];
+    let m;
     if (rng() < 0.6) {
-      part(GEO.dodec, tone, s * 0.55, s * 0.4, s * 0.55,
+      m = part(GEO.dodec, tone, s * 0.55, s * 0.4, s * 0.55,
         x, y, z, 0, rng() * Math.PI, 0, scene);
     } else {
-      part(GEO.box, tone, s, s * 0.6, s * 0.8,
+      m = part(GEO.box, tone, s, s * 0.6, s * 0.8,
         x, y, z, (rng() - 0.5) * 0.3, rng() * Math.PI, (rng() - 0.5) * 0.3, scene);
     }
+    m.userData.blocker = true; // camera raycast blocker (issue #12)
     rocks.push({ x, y, z, s });
   }
   let px = cx;
@@ -1019,18 +1033,22 @@ function buildArenaGate(scene) {
     ARENA_RING_R * Math.sin(e),
   ]);
   for (const [px, pz] of pillars) {
-    part(GEO.box, M(COL_OBSIDIAN_3), pw, ph, pw, px, ph / 2, pz, 0, 0, 0, scene);
+    part(GEO.box, M(COL_OBSIDIAN_3), pw, ph, pw, px, ph / 2, pz, 0, 0, 0, scene)
+      .userData.blocker = true; // mouth-gate pillar: camera raycast blocker (issue #12)
     part(GEO.box, M(COL_OBSIDIAN_2), pw + 0.5, 0.35, pw + 0.5,
-      px, ph + 0.17, pz, 0, 0, 0, scene); // cap stone (visual trim)
+      px, ph + 0.17, pz, 0, 0, 0, scene)
+      .userData.blocker = true; // cap stone: camera raycast blocker (issue #12)
   }
   const gx = pillars[0][0];
   const lh = ARENA_GATE.lintelH;
   const lw = ARENA_GATE.lintelW;
   const llen = ARENA_GATE.lintelLen;
   part(GEO.box, M(COL_OBSIDIAN_3), lw, lh, llen,
-    gx, ph + lh / 2, -llen / 2 + 0.1, 0, 0, 0, scene);
+    gx, ph + lh / 2, -llen / 2 + 0.1, 0, 0, 0, scene)
+    .userData.blocker = true; // cracked lintel: camera raycast blocker (issue #12)
   part(GEO.box, M(COL_OBSIDIAN_2), lw, lh, llen,
-    gx + 0.3, ph + lh / 2 - 0.25, llen / 2 - 0.1, 0, 0, 0, scene);
+    gx + 0.3, ph + lh / 2 - 0.25, llen / 2 - 0.1, 0, 0, 0, scene)
+    .userData.blocker = true; // cracked lintel: camera raycast blocker (issue #12)
 }
 
 // Volcanic spires (issue #9): the crater skyline. Twisted two-cone snags on
@@ -1039,12 +1057,15 @@ function buildArenaGate(scene) {
 // the light differently from every side instead of rendering one flat face.
 function buildArenaSpires(scene) {
   ARENA_SPIRES.forEach(([x, z, h, w], i) => {
-    part(GEO.box, M(COL_OBSIDIAN), w * 1.6, 1.2, w * 1.6, x, 0.6, z, 0, i * 0.4, 0, scene);
+    part(GEO.box, M(COL_OBSIDIAN), w * 1.6, 1.2, w * 1.6, x, 0.6, z, 0, i * 0.4, 0, scene)
+      .userData.blocker = true; // spire base: camera raycast blocker (issue #12)
     part(GEO.cone4, M(COL_OBSIDIAN_3), w * 0.8, h * 0.55, w * 0.8,
-      x, 0.8 + h * 0.275, z, 0, i * 1.3 + 0.4, 0.04 * (i - 1), scene);
+      x, 0.8 + h * 0.275, z, 0, i * 1.3 + 0.4, 0.04 * (i - 1), scene)
+      .userData.blocker = true; // spire: camera raycast blocker (issue #12)
     part(GEO.cone4, M(COL_OBSIDIAN_3), w * 0.55, h * 0.5, w * 0.55,
       x + 0.3 * (i - 1), 0.8 + h * 0.55 - 0.5 + h * 0.25, z + 0.2 * i,
-      0.05 * i, i * 1.3 + 0.4 + Math.PI / 4, 0.08 * (i - 1), scene);
+      0.05 * i, i * 1.3 + 0.4 + Math.PI / 4, 0.08 * (i - 1), scene)
+      .userData.blocker = true; // spire tip: camera raycast blocker (issue #12)
   });
 }
 
@@ -1398,6 +1419,7 @@ function buildShelves(scene) {
     m.position.set((x0 + x1) / 2, (top + BEACH_BASE_Y) / 2, 0);
     m.castShadow = true;
     m.receiveShadow = true;
+    m.userData.blocker = true; // raised terrace slab: camera raycast blocker (issue #12)
     scene.add(m);
   });
 }
