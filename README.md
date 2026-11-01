@@ -25,6 +25,8 @@ that attach with mass + colliders, bump-attacking ball boss with a
 momentum-rules fight (wind-up telegraphs, piece loss, win/lose icon screens,
 victory boss-ball attach), per-zone fog, synthesized audio plus a layered
 180 s music track (base bed + one stem per weapon; the mix thickens with HP),
+mirrored visual layers (gloom-to-gold fullscreen grade + fog + gradient sky,
+keyed to held weapons: gray haze, then light, then yellows, then gold),
 `?debug=1` state bridge, Futurism force lines (ghost echoes, flick streaks,
 wind-up lines, roll/whoosh noise — visual-only, past motion only), edge safety
 net (sea/lava/fall/out-of-bounds respawn at the last grounded spot with a

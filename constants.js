@@ -1037,3 +1037,34 @@ export const COL_BOSS = 0xd8cfc0;
 export const COL_BOSS_BAND = 0x2b2630;
 export const COL_BOSS_EYE = 0x1c1a18;
 export const COL_DAMAGE_FLASH = 0xff2222;
+
+// Visual layers (issue #16): the world wakes up as you arm up, mirroring the
+// music layers (issue #11). Keyed to ITEMS HELD, not collection order; each
+// item's deltas compose independently (see visual.js). Numbers are playtest
+// starting points, not gospel.
+export const VIS_SAT_BASE = 0.15; // Layer 0 gloom: almost grayscale
+export const VIS_SAT_YELLOW_SWORD = 0.8; // Layer 2: sand yellows awake
+export const VIS_SAT_OTHER_SWORD = 0.4; // Layer 2: other hues partial
+export const VIS_SAT_GREEN_KEPT = 0.15; // Layer 2: foliage greens stay dull
+export const VIS_SAT_FULL = 1.0; // Layer 3: full saturation across hues
+export const VIS_EXPOSURE_GLOOM = 0.7; // Layer 0: dark
+export const VIS_EXPOSURE_NORMAL = 1.0; // Layer 1 (dagger): normally lit
+export const VIS_EXPOSURE_GOLD_BOOST = 0.1; // Layer 3 (hammer): golden lift
+export const VIS_CONTRAST_GLOOM = 0.85; // Layer 0: muted
+export const VIS_CONTRAST_NORMAL = 1.0; // Layer 1: normal
+export const VIS_CONTRAST_GOLD_BOOST = 0.05; // Layer 3: warm punch
+export const VIS_FOG_GLOOM = 1.6; // Layer 0: very strong haze
+export const VIS_FOG_SWORD = 1.2; // Layer 2: gloom lifting
+export const VIS_FOG_GOLD = 0.9; // Layer 3: luminous, not removed
+export const VIS_FOG_TINT_GLOOM = 0x8a8f96; // cool gray haze
+export const VIS_FOG_TINT_SWORD = 0xc2b489; // horizon warming toward yellow
+export const VIS_FOG_TINT_GOLD = 0xe8c87a; // warm gold haze
+export const VIS_FOG_MIX = 0.55; // final fog = zone color lerped this far toward the layer tint
+export const VIS_SKY_ZENITH_GLOOM = 0x3a3f45; // dark gray zenith
+export const VIS_SKY_ZENITH_LIFTED = 0x4c525a; // dagger: slightly lifted, still gray
+export const VIS_SKY_ZENITH_WARM = 0xd8cfae; // hammer: pale warm zenith
+export const VIS_WARM_TINT = [1.06, 1.0, 0.92]; // hammer: golden lift on exposure
+export const VIS_UNLOCK_TAU = 0.3; // s, pickup fade-in ~1 s (mirrors MUSIC_UNLOCK_TAU)
+export const VIS_LOCK_TAU = 0.15; // s, damage fade-out ~0.5 s (mirrors MUSIC_LOCK_TAU)
+export const VIS_STOP_TAU = 0.3; // s, game-over fade to Layer 0 (mirrors MUSIC_STOP_TAU)
+export const VIS_SKY_RADIUS = 350; // gradient dome radius (camera far is 400)

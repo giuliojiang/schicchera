@@ -100,6 +100,9 @@ import {
   SUN_OFFSET,
   TREMBLE_POS,
   TREMBLE_ROT,
+  VIS_LOCK_TAU,
+  VIS_STOP_TAU,
+  VIS_UNLOCK_TAU,
   WINDUP_DURATION,
   ZONE_ARENA,
   ZONE_BEACH,
@@ -143,6 +146,13 @@ import {
   buildPlayerMesh,
   detachWeapon,
 } from './level.js';
+import {
+  createInitialVisualState,
+  createVisualLayers,
+  snapVisualLayers,
+  updateVisualLayers,
+  visualSnapshot,
+} from './visual.js';
 import {
   ensureAudio,
   isMuted,
@@ -226,6 +236,39 @@ const camera = new THREE.PerspectiveCamera(
   CAMERA_NEAR,
   400
 );
+
+// Visual layers (issue #16): grade pass + fog + sky dome, mirroring the
+// music layers. Keyed to items held; run start is Layer 0.
+const visual = createVisualLayers(renderer, scene, camera);
+let visualCurrent = createInitialVisualState();
+let prevVisualCount = 0;
+let visualTau = VIS_UNLOCK_TAU;
+// Smoothed zone color: zone crossings glide at FOG_LERP_SPEED, then the
+// visual layers mix that toward the layer tint (no hard cuts anywhere).
+const smoothZoneColor = new THREE.Color(FOG_VILLAGE);
+
+function updateVisual(dt) {
+  // Game over fades to Layer 0; victory keeps the held layers.
+  const held = phase === 'lost' ? [] : pieces;
+  if (held.length > prevVisualCount) visualTau = VIS_UNLOCK_TAU;
+  else if (held.length < prevVisualCount) visualTau = VIS_LOCK_TAU;
+  if (phase === 'lost') visualTau = VIS_STOP_TAU;
+  prevVisualCount = held.length;
+  const kz = 1 - Math.exp(-FOG_LERP_SPEED * dt);
+  smoothZoneColor.lerp(FOG_COLORS[zone], kz);
+  updateVisualLayers({
+    dt,
+    pieces: held,
+    zoneColor: smoothZoneColor,
+    scene,
+    camera,
+    current: visualCurrent,
+    gradeUniforms: visual.gradePass.uniforms,
+    skyUniforms: visual.skyUniforms,
+    skyMesh: visual.skyMesh,
+    tau: visualTau,
+  });
+}
 
 // Physics.
 const world = createWorld();
@@ -676,6 +719,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  visual.composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // Camera channels (issue #7): yaw is direct (aiming), everything else eased.
@@ -872,11 +916,9 @@ function updateWorld(dt) {
   const py = playerBody.position.y;
   const pz = playerBody.position.z;
 
-  // Fog follows the zone: the atmosphere itself changes palette.
+  // Zone tracking only: fog + sky are owned by the visual layers
+  // (issue #16), which mix the zone color toward the layer tint.
   zone = zoneOf(px, pz, ZONES);
-  const k = 1 - Math.exp(-FOG_LERP_SPEED * dt);
-  scene.fog.color.lerp(FOG_COLORS[zone], k);
-  scene.background.lerp(FOG_COLORS[zone], k);
 
   // Shadow-casting sun follows the player so shadows stay crisp anywhere.
   sun.position.set(px + SUN_OFFSET[0], py + SUN_OFFSET[1], pz + SUN_OFFSET[2]);
@@ -1113,7 +1155,9 @@ function frame(now) {
 
     // End screens freeze the sim behind the overlay (spec section 11).
     if (phase !== 'playing') {
-      renderer.render(scene, camera);
+      // Game-over fade to Layer 0 still animates behind the overlay.
+      updateVisual(dt);
+      visual.composer.render();
       frames++;
       return;
     }
@@ -1128,8 +1172,9 @@ function frame(now) {
     }
 
     updateCamera(frames === 0 ? 1 : dt);
+    updateVisual(dt);
 
-    renderer.render(scene, camera);
+    visual.composer.render();
     frames++;
   } catch (err) {
     // Visual-only failure signal (No Text): darken, keep console for details.
@@ -1161,7 +1206,8 @@ document.getElementById('muteBtn').addEventListener('click', () => {
 });
 syncMuteBtn();
 updateCamera(1);
-renderer.render(scene, camera);
+updateVisual(1);
+visual.composer.render();
 requestAnimationFrame((t) => {
   lastTime = t;
   requestAnimationFrame(frame);
@@ -1200,6 +1246,7 @@ if (params.has('debug') || params.has('autoplay')) {
           lastRespawn: lastRespawn ? { ...lastRespawn } : null,
           pickups: pickups.map((p) => ({ id: p.id, taken: p.taken })),
           music: musicSnapshot(),
+          visual: visualSnapshot(visualCurrent, phase === 'lost' ? [] : pieces),
           boss: {
             pos: [
               +bossBody.position.x.toFixed(4),
@@ -1260,7 +1307,18 @@ if (params.has('debug') || params.has('autoplay')) {
       stepSim(1 / 60);
     }
     updateCamera(1);
-    renderer.render(scene, camera);
+    smoothZoneColor.copy(FOG_COLORS[zone]);
+    snapVisualLayers({
+      pieces: phase === 'lost' ? [] : pieces,
+      zoneColor: smoothZoneColor,
+      scene,
+      camera,
+      current: visualCurrent,
+      gradeUniforms: visual.gradePass.uniforms,
+      skyUniforms: visual.skyUniforms,
+      skyMesh: visual.skyMesh,
+    });
+    visual.composer.render();
     document.title =
       `sim${simN} ${phase} boss:${bossState}/hp${bossHp}/fight${fightActive ? 1 : 0}` +
       ` pieces:${pieces.join(',') || '-'} mass:${playerBody.mass.toFixed(2)}` +
