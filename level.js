@@ -71,6 +71,8 @@ import {
   COL_CANOPY,
   COL_CLOTH,
   COL_CLOUD,
+  COL_CONCRETE,
+  COL_CONCRETE_DARK,
   COL_DIRT,
   COL_DOOR,
   COL_DRIFTWOOD,
@@ -122,11 +124,13 @@ import {
   COL_TIDE_POOL,
   COL_TRUNK,
   COL_VILLAGE_GROUND,
+  COL_WALL_CONCRETE,
   COL_WALL_DUNE,
   COL_WALL_FENCE,
   COL_WALL_ROCK,
   COL_WALL_TREELINE,
   COL_WATER,
+  COL_WINDOW,
   COL_WOOD_DARK,
   CRATES,
   DAGGER_MASS,
@@ -180,6 +184,7 @@ import {
   SEAWEED,
   SEA_TOP_Y,
   SHADOW_EXTENT,
+  SHADOW_FAR,
   SHADOW_MAP_SIZE,
   SHELF_BUSHES,
   SHORE_X,
@@ -290,11 +295,83 @@ export function buildLights(scene) {
   sun.shadow.camera.top = SHADOW_EXTENT;
   sun.shadow.camera.bottom = -SHADOW_EXTENT;
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 80;
-  sun.shadow.bias = -0.0004;
+  sun.shadow.camera.far = SHADOW_FAR;
+  sun.shadow.bias = -0.0015;
+  sun.shadow.normalBias = 0.03;
   scene.add(sun);
   scene.add(sun.target);
   return { sun };
+}
+
+// Brutalist concrete (issue #14): ONE shared board-marked texture for the
+// whole village. Subtle horizontal formwork boards + tie holes + speckle,
+// drawn once on a canvas. Two shared materials (light/dark) tint the same
+// texture — no per-building texture copies. Matte: roughness 0.9, metal 0.
+let concreteTex = null;
+function boardConcreteTexture() {
+  if (concreteTex) return concreteTex;
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#9b9b97';
+  g.fillRect(0, 0, 256, 256);
+  // Formwork boards: faint horizontal bands.
+  for (let y = 0; y < 256; y += 36) {
+    g.fillStyle = 'rgba(0,0,0,0.07)';
+    g.fillRect(0, y, 256, 2);
+    g.fillStyle = 'rgba(255,255,255,0.05)';
+    g.fillRect(0, y + 2, 256, 1);
+  }
+  // Board joints: short vertical seams, staggered per band.
+  for (let row = 0; row < 8; row++) {
+    const y = row * 36;
+    for (let k = 0; k < 2; k++) {
+      const x = ((row * 97 + k * 131) % 256 + 256) % 256;
+      g.fillStyle = 'rgba(0,0,0,0.06)';
+      g.fillRect(x, y, 1, 36);
+    }
+  }
+  // Tie holes: small dark dots on a loose grid.
+  for (let ty = 18; ty < 256; ty += 72) {
+    for (let tx = 18; tx < 256; tx += 72) {
+      g.fillStyle = 'rgba(0,0,0,0.16)';
+      g.beginPath();
+      g.arc(tx + (ty % 144 === 18 ? 0 : 36), ty, 2.2, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  // Speckle: light grain so flat faces never read as a solid fill.
+  for (let i = 0; i < 1400; i++) {
+    const v = 130 + Math.floor(Math.random() * 50);
+    g.fillStyle = `rgba(${v},${v},${v - 4},0.10)`;
+    g.fillRect(Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), 1, 1);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  concreteTex = tex;
+  return tex;
+}
+let concreteMats = null;
+function brutalistMats() {
+  if (concreteMats) return concreteMats;
+  const tex = boardConcreteTexture();
+  // NOTE: the canvas already carries the concrete gray, so the light material
+  // is tinted white (map x white = map). Tinting gray again would double-
+  // darken every face. The dark variant is a light-gray tint of the same map.
+  const light = new THREE.MeshStandardMaterial({
+    map: tex, color: 0xffffff, roughness: 0.9, metalness: 0, flatShading: true,
+  });
+  const dark = new THREE.MeshStandardMaterial({
+    map: tex, color: 0xd9d9d9, roughness: 0.92, metalness: 0, flatShading: true,
+  });
+  const window = new THREE.MeshStandardMaterial({
+    color: COL_WINDOW, roughness: 0.9, metalness: 0, flatShading: true,
+  });
+  concreteMats = { light, dark, window };
+  return concreteMats;
 }
 
 function slab(scene, zone, color, topY = 0) {
@@ -335,24 +412,26 @@ function buildPlaza(scene) {
     flatPart(GEO.box, M(COL_STONE), 0.5, 0.12, 0.35,
       Math.cos(a) * 6.4, 0.06, Math.sin(a) * 6.4, -a, scene);
   }
-  // PERMANENT pedestal: stays after the dagger is collected.
-  const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 0.35, 10), M(COL_STONE));
-  ped.position.set(0, 0.175, 0);
-  ped.castShadow = true;
-  ped.receiveShadow = true;
-  scene.add(ped);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.08, 10), M(COL_ARCH));
-  cap.position.set(0, 0.39, 0);
-  cap.castShadow = true;
-  scene.add(cap);
+  // PERMANENT pedestal (issue #14): a tall plain raw-concrete monolith. The
+  // dagger floats above its cap; the monolith stays after pickup (the issue
+  // #5 permanent-pedestal rule, only the form changes). Deliberately left
+  // collider-free like the old stub, so plaza movement is exactly unchanged.
+  // Never tagged as a camera blocker (pedestals are excluded, issue #12).
+  {
+    const { light } = brutalistMats();
+    const shaft = box(0.9, 1.5, 0.9, light, 0, 0.75, 0);
+    scene.add(shaft);
+    const capSlab = box(1.1, 0.12, 1.1, light, 0, 1.56, 0);
+    scene.add(capSlab);
+  }
   // Planting ring just outside the paving (skips the road crossings).
+  // Bushes only: no flowers, so the plaza keeps the concrete/sand/green
+  // palette (issue #14 palette rule).
   for (const deg of [30, 60, 120, 150, 210, 240, 300, 330]) {
     const a = (deg / 180) * Math.PI;
     const bx = Math.cos(a) * 7.2;
     const bz = Math.sin(a) * 7.2;
     part(GEO.ico, M(COL_BUSH[(deg / 30) % 3]), 0.35, 0.28, 0.35, bx, 0.22, bz, 0, 0, 0, scene);
-    part(GEO.ico, M(COL_FLOWER[(deg / 30) % 3]), 0.08, 0.08, 0.08,
-      bx + 0.4, 0.1, bz + 0.2, 0, 0, 0, scene);
   }
 }
 
@@ -468,11 +547,12 @@ function buildScatter(scene) {
       const r = 0.09 + rng() * 0.07;
       flatPart(GEO.dodec, M(COL_STONE), r, r * 0.7, r, x, r * 0.5, z, rng() * 3, scene);
     } else {
-      // Flower cluster: 3 muted dots.
-      for (let i = 0; i < 3; i++) {
-        part(GEO.ico, M(COL_FLOWER[Math.floor(rng() * 3)]), 0.08, 0.08, 0.08,
-          x + (rng() - 0.5) * 0.5, 0.1, z + (rng() - 0.5) * 0.5, 0, 0, 0, scene);
-      }
+      // Sand clod: a second pebble variant. No flowers in the Brutalist
+      // village (issue #14 palette rule: concrete gray, warm sand, muted
+      // green only).
+      const r = 0.11 + rng() * 0.08;
+      flatPart(GEO.dodec, M(COL_PATCH_SAND), r, r * 0.6, r,
+        x + (rng() - 0.5) * 0.4, r * 0.45, z + (rng() - 0.5) * 0.4, rng() * 3, scene);
     }
   }
 }
@@ -495,16 +575,38 @@ function buildReeds(scene) {
 }
 
 function buildBanks(scene) {
-  // Raised earth along both channel edges: a dug waterway, not a painted line.
-  const m = box(40, 0.12, 0.7, M(COL_DIRT), 0, 0.06, CHANNEL_Z0 - 0.35, false, true);
-  scene.add(m);
-  const m2 = box(40, 0.12, 0.7, M(COL_DIRT), 0, 0.06, CHANNEL_Z1 + 0.35, false, true);
-  scene.add(m2);
+  // Channeled stream (issue #14): straight concrete walls containing the
+  // watercourse, replacing the natural banks. Same water line, same course.
+  // Visual-only, like the old banks; both walls join the camera blockers.
+  const { light, dark } = brutalistMats();
+  // Gaps at both bridge crossings (x -8 and +8, deck width 3 + margin).
+  const segs = [
+    [-20, -9.9],
+    [-6.1, 6.1],
+    [9.9, 20],
+  ];
+  const wall = (z, mat) => {
+    for (const [x0, x1] of segs) {
+      const cx = (x0 + x1) / 2;
+      const len = x1 - x0;
+      const m = box(len, 0.9, 0.4, mat, cx, 0.45, z);
+      m.userData.blocker = true;
+      scene.add(m);
+      // Coping cap: a thin lip overhanging the water.
+      const cap = box(len, 0.1, 0.55, mat, cx, 0.95, z);
+      cap.userData.blocker = true;
+      scene.add(cap);
+    }
+  };
+  wall(CHANNEL_Z0 - 0.2, light);
+  wall(CHANNEL_Z1 + 0.2, dark);
 }
 
 function buildWalls(scene) {
+  const { light: concrete } = brutalistMats();
   const mats = {
     fence: matte(COL_WALL_FENCE),
+    concrete,
     dune: matte(COL_WALL_DUNE),
     treeline: matte(COL_WALL_TREELINE),
     rock: matte(COL_WALL_ROCK),
@@ -515,6 +617,18 @@ function buildWalls(scene) {
     m.userData.blocker = true; // camera raycast blocker (issue #12)
     scene.add(m);
   }
+  // Village boundary planting (issue #14): muted green bushes softening the
+  // concrete walls. Visual-only, clear of roads and the pass opening.
+  const bushSpots = [];
+  for (let x = -16; x <= 16; x += 4) bushSpots.push([x, 19.2]);
+  for (let z = -11; z <= 11; z += 3.5) {
+    if (Math.abs(z) < 2.6) continue; // east road
+    if (Math.abs(z - 10) < 1.6) continue; // channel mouth
+    bushSpots.push([19.2, z]);
+  }
+  bushSpots.forEach(([x, z], i) => {
+    part(GEO.ico, M(COL_BUSH[i % 3]), 0.55, 0.42, 0.55, x, 0.3, z, 0, i * 0.7, 0, scene);
+  });
 }
 
 function buildHills(scene) {
@@ -600,147 +714,96 @@ function buildRocks(scene) {
 }
 
 function buildHuts(scene) {
-  const bodyMats = COL_HUT_BODY.map((c) => M(c));
-  const roofMats = [...COL_HUT_ROOF.map((c) => M(c)), M(COL_THATCH)];
-  const frameMat = M(COL_WOOD_DARK);
-  const doorMat = M(COL_DOOR);
-  const glassMat = M(COL_GLASS, 0.6);
-  const stoneMat = M(COL_STONE);
-  const strawMat = M(COL_HUT_ROOF[0]);
+  // Brutalist village blocks (issue #14). Same XZ footprints, rotations, and
+  // ground footprints as the old huts — the layout and its clearance are
+  // unchanged — but every body is now a raw-concrete monolith 8-14x the
+  // player cube, with a stepped Habitat-style crown, dark inset window grids,
+  // engaged pilotis piers, and roof-terrace bushes on some blocks. All
+  // primitives, two shared concrete materials + one window material.
+  const { light, dark, window } = brutalistMats();
   HUTS.forEach(([x, z, rotY, bodyTone, roofTone, bodyH, roofKind], hi) => {
-    const feats = HUT_FEATURES[hi];
-    const has = (f) => feats.includes(f);
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     g.rotation.y = rotY;
     const bsx = HUT_BODY[0];
-    const bsy = bodyH || HUT_BODY[1];
     const bsz = HUT_BODY[2];
-    const small = bsy < 2.2;
-    part(GEO.box, bodyMats[bodyTone], bsx, bsy, bsz, 0, bsy / 2, 0, 0, 0, 0, g)
-      .userData.blocker = true; // camera raycast blocker (issue #12)
-
-    // Roof: pyramid or pitched gable.
-    if (roofKind === 1) {
-      const roof = part(GABLE_GEO, roofMats[roofTone], 1, 0.45, 1, 0, bsy + 0.585, 0, 0, 0, 0, g);
-      roof.castShadow = true;
-      roof.userData.blocker = true; // camera raycast blocker (issue #12)
-      part(GEO.box, frameMat, 5.2, 0.12, 0.4, 0, bsy + 1.75, 0, 0, 0, 0, g); // ridge cap
-    } else {
-      const roofR = Math.hypot(bsx / 2, bsz / 2) + 0.3;
-      const roofH = small ? 1.4 : 1.8;
-      part(GEO.cone4, roofMats[roofTone], roofR, roofH, roofR, 0, bsy + roofH / 2, 0, 0, Math.PI / 4, 0, g)
-        .userData.blocker = true; // camera raycast blocker (issue #12)
-    }
-
-    // Door upgrade on every hut: frame + wood panel + step stone.
+    const totalH = bodyH || 8;
+    const crownH = totalH >= 11 ? 2 : 1.5;
+    const baseH = totalH - crownH;
+    const baseMat = bodyTone === 0 ? light : dark;
     const fz = bsz / 2;
-    part(GEO.box, frameMat, 0.12, 1.7, 0.1, -0.56, 0.85, fz + 0.02, 0, 0, 0, g);
-    part(GEO.box, frameMat, 0.12, 1.7, 0.1, 0.56, 0.85, fz + 0.02, 0, 0, 0, g);
-    part(GEO.box, frameMat, 1.24, 0.12, 0.1, 0, 1.73, fz + 0.02, 0, 0, 0, g);
-    part(GEO.box, doorMat, 1.0, 1.6, 0.08, 0, 0.8, fz + 0.02, 0, 0, 0, g);
-    part(GEO.box, stoneMat, 1.2, 0.12, 0.5, 0, 0.06, fz + 0.3, 0, 0, 0, g);
-
-    // Windows with frames + shutters on the door face.
-    const winY = small ? 1.25 : 1.55;
-    if (has('windows') || has('flowerbox')) {
-      for (const wx of [-1.15, 1.15]) {
-        part(GEO.box, frameMat, 0.9, 0.9, 0.08, wx, winY, fz + 0.02, 0, 0, 0, g);
-        part(GEO.box, glassMat, 0.66, 0.66, 0.1, wx, winY, fz + 0.03, 0, 0, 0, g);
-        part(GEO.box, doorMat, 0.22, 0.9, 0.06, wx - 0.56, winY, fz + 0.02, 0, 0, 0, g);
-        part(GEO.box, doorMat, 0.22, 0.9, 0.06, wx + 0.56, winY, fz + 0.02, 0, 0, 0, g);
+    // Monolith slab: full footprint at ground level (the collider matches).
+    part(GEO.box, baseMat, bsx, baseH, bsz, 0, baseH / 2, 0, 0, 0, 0, g)
+      .userData.blocker = true; // camera raycast blocker (issue #12)
+    // Stepped crown: smaller offset box (Habitat-style stacking accent).
+    const cxOff = roofKind === 1 ? 0.4 : -0.4;
+    part(GEO.box, baseMat, 2.8, crownH, 2.2, cxOff, baseH + crownH / 2, -0.3, 0, 0, 0, g)
+      .userData.blocker = true; // camera raycast blocker (issue #12)
+    // Window grid on the front face: dark near-black inset boxes in modular
+    // rows, each row shaded by a thin concrete fin (deep-shadow read).
+    // No emissive, no glass shine.
+    for (let wy = 2.6; wy < baseH - 1.0; wy += 1.9) {
+      for (const wx of [-1.2, 0, 1.2]) {
+        part(GEO.box, window, 0.9, 1.1, 0.14, wx, wy, fz - 0.02, 0, 0, 0, g);
       }
+      part(GEO.box, baseMat, bsx + 0.2, 0.25, 0.3, 0, wy + 0.78, fz + 0.02, 0, 0, 0, g);
     }
-    // Flower box under the right window.
-    if (has('flowerbox')) {
-      part(GEO.box, frameMat, 0.9, 0.22, 0.28, 1.15, winY - 0.62, fz + 0.12, 0, 0, 0, g);
-      for (let i = 0; i < 4; i++) {
-        part(GEO.ico, M(COL_FLOWER[i % 3]), 0.07, 0.07, 0.07,
-          0.85 + i * 0.2, winY - 0.46, fz + 0.12, 0, 0, 0, g);
-      }
+    // Crown slits: two narrow dark slots on the stepped crown.
+    part(GEO.box, window, 0.5, 0.8, 0.14, cxOff - 0.6, baseH + crownH / 2, 0.8, 0, 0, 0, g);
+    part(GEO.box, window, 0.5, 0.8, 0.14, cxOff + 0.6, baseH + crownH / 2, 0.8, 0, 0, 0, g);
+    // Engaged pilotis: three concrete piers in front of the solid ground
+    // floor. Visual rhythm only — the collider stays the full footprint, so
+    // there is never a gap to wedge into (issue #14 pilotis rule).
+    for (const px of [-1.4, 0, 1.4]) {
+      part(GEO.box, baseMat, 0.4, 2.2, 0.4, px, 1.1, fz + 0.35, 0, 0, 0, g);
     }
-    // Timber framing on front + back faces.
-    if (has('timber')) {
-      for (const sz of [fz + 0.01, -fz - 0.01]) {
-        for (const vx of [-1.9, 0, 1.9]) {
-          part(GEO.box, frameMat, 0.14, bsy - 0.2, 0.06, vx, bsy / 2, sz, 0, 0, 0, g);
-        }
-        part(GEO.box, frameMat, 3.9, 0.14, 0.06, 0, bsy - 0.5, sz, 0, 0, 0, g);
-      }
-    }
-    // Chimney sunk into the roof slope, alternating stone/brick.
-    if (has('chimney')) {
-      const cm = hi % 2 === 0 ? stoneMat : M(COL_BRIDGE);
-      if (roofKind === 1) {
-        part(GEO.box, cm, 0.5, 1.2, 0.5, 1.2, bsy + 1.43, 0.8, 0, 0, 0, g);
-      } else {
-        part(GEO.box, cm, 0.5, 1.2, 0.5, 1.0, bsy + 1.22, 0, 0, 0, 0, g);
-      }
-    }
-    // Porch: slab roof on two posts over the door.
-    if (has('porch')) {
-      const py = small ? 1.7 : 2.0;
-      part(GEO.box, strawMat, 1.8, 0.1, 1.0, 0, py, fz + 0.5, 0, 0, 0, g);
-      part(GEO.box, frameMat, 0.1, py, 0.1, -0.8, py / 2, fz + 0.9, 0, 0, 0, g);
-      part(GEO.box, frameMat, 0.1, py, 0.1, 0.8, py / 2, fz + 0.9, 0, 0, 0, g);
-    }
-    // Stone wall base grounding the hut.
-    if (has('wallbase')) {
-      part(GEO.box, stoneMat, bsx + 0.15, 0.35, bsz + 0.15, 0, 0.175, 0, 0, 0, 0, g);
+    // Roof-terrace bushes on alternating blocks (softening green).
+    if (hi % 2 === 0) {
+      part(GEO.ico, M(COL_BUSH[hi % 3]), 0.5, 0.38, 0.5,
+        cxOff - 0.8, baseH + crownH + 0.28, -0.5, 0, hi, 0, g);
+      part(GEO.ico, M(COL_BUSH[(hi + 1) % 3]), 0.4, 0.3, 0.4,
+        -1.2, baseH + 0.22, 0.8, 0, hi * 0.7, 0, g);
     }
     scene.add(g);
-    // Fenced garden bed beside the hut (fence run itself is in FENCES).
-    if (has('garden')) {
-      part(GEO.ico, M(COL_BUSH[0]), 0.5, 0.38, 0.5, -9.5, 0.3, -11.3, 0, 0, 0, scene);
-      const dots = [[-9.2, -10.6], [-9.8, -10.8], [-9.4, -12.1], [-9.0, -11.6], [-9.9, -12.3]];
-      dots.forEach(([dx, dz], i) => {
-        part(GEO.ico, M(COL_FLOWER[i % 3]), 0.08, 0.08, 0.08, dx, 0.12, dz, 0, 0, 0, scene);
-      });
-    }
   });
 }
 
 function buildBridges(scene) {
-  const mat = matte(COL_BRIDGE);
-  const postMat = matte(COL_TRUNK);
+  // Heavy concrete slab bridge (issue #14) with concrete parapets. Same
+  // position, same crossing, same slope math as the physics deck colliders:
+  // the visual deck is thickened downward only, so its top face matches the
+  // walkable collider exactly. Parapets are visual-only (like the old rails:
+  // the deck collider is what matters) but join the camera blockers.
+  const { light, dark } = brutalistMats();
   const slopeLen = Math.hypot(BRIDGE_SPAN / 2, BRIDGE_CREST_H);
   const slopeAng = Math.atan2(BRIDGE_CREST_H, BRIDGE_SPAN / 2);
   const chanMid = (CHANNEL_Z0 + CHANNEL_Z1) / 2;
-  const railMat = M(COL_WOOD_DARK);
-  // Deck top line: outer ends low, crest high.
+  const DECK_T = 0.5; // visual thickness (collider stays BRIDGE_THICK)
   const deckY = (z) => 0.15 + BRIDGE_CREST_H * (1 - Math.abs(z - chanMid) / (BRIDGE_SPAN / 2));
   for (const [bx, bw] of BRIDGES) {
-    const y = BRIDGE_CREST_H / 2;
-    const south = box(bw, BRIDGE_THICK, slopeLen, mat, bx, y, chanMid - BRIDGE_SPAN / 4);
+    const mat = bx < 0 ? light : dark;
+    // Lower the center so the thicker slab's TOP matches the collider top.
+    const y = BRIDGE_CREST_H / 2 - (DECK_T - BRIDGE_THICK) / 2;
+    const south = box(bw, DECK_T, slopeLen + 0.6, mat, bx, y, chanMid - BRIDGE_SPAN / 4);
     south.rotation.x = -slopeAng;
+    south.userData.blocker = true;
     scene.add(south);
-    const north = box(bw, BRIDGE_THICK, slopeLen, mat, bx, y, chanMid + BRIDGE_SPAN / 4);
+    const north = box(bw, DECK_T, slopeLen + 0.6, mat, bx, y, chanMid + BRIDGE_SPAN / 4);
     north.rotation.x = slopeAng;
+    north.userData.blocker = true;
     scene.add(north);
-    // Railings both sides: posts following the slope + sloped top rails.
-    // Visual-only: the deck collider is what matters, rails never narrow it.
-    for (const sx of [-bw / 2 + 0.15, bw / 2 - 0.15]) {
-      for (const dz of [-1.7, -1.0, -0.3, 0.3, 1.0, 1.7]) {
-        const z = chanMid + dz;
-        const p = box(0.09, 0.6, 0.09, postMat, bx + sx, deckY(z) + 0.25, z, false, false);
-        scene.add(p);
-      }
-      const railS = box(0.08, 0.08, slopeLen + 0.2, railMat, bx + sx, deckY(chanMid - 1) + 0.55, chanMid - BRIDGE_SPAN / 4, false, false);
-      railS.rotation.x = -slopeAng;
-      scene.add(railS);
-      const railN = box(0.08, 0.08, slopeLen + 0.2, railMat, bx + sx, deckY(chanMid + 1) + 0.55, chanMid + BRIDGE_SPAN / 4, false, false);
-      railN.rotation.x = slopeAng;
-      scene.add(railN);
-    }
-    // Plank lines across each slope (visual).
-    for (const sc of [chanMid - BRIDGE_SPAN / 4, chanMid + BRIDGE_SPAN / 4]) {
-      for (const off of [-0.6, 0, 0.6]) {
-        const z = sc + off;
-        const ang = sc < chanMid ? -slopeAng : slopeAng;
-        const p = box(bw - 0.3, 0.02, 0.14, railMat, bx, deckY(z) + 0.01, z, false, false);
-        p.rotation.x = ang;
-        scene.add(p);
-      }
+    // Solid parapets both sides, following the slope.
+    for (const sx of [-bw / 2 + 0.14, bw / 2 - 0.14]) {
+      const parS = box(0.28, 0.55, slopeLen + 0.6, mat,
+        bx + sx, deckY(chanMid - 1) + 0.28, chanMid - BRIDGE_SPAN / 4, false, false);
+      parS.rotation.x = -slopeAng;
+      parS.userData.blocker = true;
+      scene.add(parS);
+      const parN = box(0.28, 0.55, slopeLen + 0.6, mat,
+        bx + sx, deckY(chanMid + 1) + 0.28, chanMid + BRIDGE_SPAN / 4, false, false);
+      parN.rotation.x = slopeAng;
+      parN.userData.blocker = true;
+      scene.add(parN);
     }
   }
 }
@@ -1172,72 +1235,65 @@ function buildProps(scene) {
     part(GEO.cyl10, darkWood, 0.72, 0.07, 0.72, x, by + 0.25, z, 0, 0, 0, scene);
     part(GEO.cyl10, darkWood, 0.72, 0.07, 0.72, x, by + 0.65, z, 0, 0, 0, scene);
   }
-  // Fence runs: posts + two rails; the shore run gets a draped net.
+  // Fence runs (issue #14): village runs are low concrete walls; the shore
+  // run (fi 2, beach) keeps its wood posts + draped net. The concrete walls
+  // match the fence colliders (0.3 thick, 1.0 high), so movement is unchanged.
   FENCES.forEach(([x1, z1, x2, z2, by = 0], fi) => {
     const len = Math.hypot(x2 - x1, z2 - z1);
     const ry = Math.atan2(x2 - x1, z2 - z1);
+    const cx = (x1 + x2) / 2;
+    const cz = (z1 + z2) / 2;
+    if (fi !== 2) {
+      const { light } = brutalistMats();
+      part(GEO.box, light, 0.3, 1.0, len, cx, by + 0.5, cz, 0, ry, 0, scene);
+      part(GEO.box, light, 0.42, 0.1, len + 0.1, cx, by + 1.0, cz, 0, ry, 0, scene);
+      return;
+    }
     const n = Math.max(2, Math.round(len / 1.3) + 1);
     for (let i = 0; i < n; i++) {
       const t = i / (n - 1);
       part(GEO.box, darkWood, 0.12, 1.0, 0.12, x1 + (x2 - x1) * t, by + 0.5, z1 + (z2 - z1) * t, 0, 0, 0, scene);
     }
-    const cx = (x1 + x2) / 2;
-    const cz = (z1 + z2) / 2;
     part(GEO.box, wood, 0.08, 0.08, len, cx, by + 0.55, cz, 0, ry, 0, scene);
     part(GEO.box, wood, 0.08, 0.08, len, cx, by + 0.88, cz, 0, ry, 0, scene);
-    if (fi === 2) {
-      // Draped fishing net on the shore run (plane width aligned with the run).
-      const net = new THREE.Mesh(GEO.plane, new THREE.MeshStandardMaterial({
-        color: COL_NET, roughness: 1, metalness: 0, side: THREE.DoubleSide,
-      }));
-      net.scale.set(len * 0.7, 0.7, 1);
-      net.position.set(cx + ((z2 - z1) / len) * 0.12, by + 0.55, cz - ((x2 - x1) / len) * 0.12);
-      net.rotation.y = ry - Math.PI / 2;
-      scene.add(net);
-    }
+    // Draped fishing net on the shore run (plane width aligned with the run).
+    const net = new THREE.Mesh(GEO.plane, new THREE.MeshStandardMaterial({
+      color: COL_NET, roughness: 1, metalness: 0, side: THREE.DoubleSide,
+    }));
+    net.scale.set(len * 0.7, 0.7, 1);
+    net.position.set(cx + ((z2 - z1) / len) * 0.12, by + 0.55, cz - ((x2 - x1) / len) * 0.12);
+    net.rotation.y = ry - Math.PI / 2;
+    scene.add(net);
   });
-  // Benches: legs + seat + back.
+  // Benches (issue #14): village benches are solid concrete slabs; the beach
+  // rest spot keeps its wood. Concrete top (0.6) matches the bench collider.
   for (const [x, z, ry, by = 0] of BENCHES) {
     const g = new THREE.Group();
     g.position.set(x, by, z);
     g.rotation.y = ry;
-    part(GEO.box, darkWood, 0.12, 0.45, 0.4, -0.6, 0.225, 0, 0, 0, 0, g);
-    part(GEO.box, darkWood, 0.12, 0.45, 0.4, 0.6, 0.225, 0, 0, 0, 0, g);
-    part(GEO.box, wood, 1.6, 0.1, 0.45, 0, 0.5, 0, 0, 0, 0, g);
-    part(GEO.box, wood, 1.6, 0.4, 0.08, 0, 0.75, -0.2, 0, 0, 0, g);
+    if (by === 0) {
+      const { light } = brutalistMats();
+      part(GEO.box, light, 1.6, 0.5, 0.5, 0, 0.25, 0, 0, 0, 0, g);
+      part(GEO.box, light, 1.7, 0.1, 0.6, 0, 0.55, 0, 0, 0, 0, g);
+    } else {
+      part(GEO.box, darkWood, 0.12, 0.45, 0.4, -0.6, 0.225, 0, 0, 0, 0, g);
+      part(GEO.box, darkWood, 0.12, 0.45, 0.4, 0.6, 0.225, 0, 0, 0, 0, g);
+      part(GEO.box, wood, 1.6, 0.1, 0.45, 0, 0.5, 0, 0, 0, 0, g);
+      part(GEO.box, wood, 1.6, 0.4, 0.08, 0, 0.75, -0.2, 0, 0, 0, g);
+    }
     scene.add(g);
   }
-  // Lantern posts (unlit daytime props).
+  // Lamp posts (issue #14): slim concrete pillars with a simple cap, in the
+  // same positions, so the village read stays familiar. Matches the 2.6-high
+  // lantern colliders.
   for (const [x, z] of LANTERNS) {
-    part(GEO.cyl8, darkWood, 0.14, 2.6, 0.14, x, 1.3, z, 0, 0, 0, scene);
-    part(GEO.box, darkWood, 0.3, 0.08, 0.3, x, 2.42, z, 0, 0, 0, scene);
-    part(GEO.box, M(0xf2e6c8, 0.7), 0.22, 0.3, 0.22, x, 2.6, z, 0, 0, 0, scene);
-    part(GEO.box, darkWood, 0.3, 0.08, 0.3, x, 2.78, z, 0, 0, 0, scene);
-    part(GEO.cone4, darkWood, 0.4, 0.25, 0.4, x, 2.94, z, 0, Math.PI / 4, 0, scene);
+    const { dark } = brutalistMats();
+    part(GEO.box, dark, 0.22, 2.6, 0.22, x, 1.3, z, 0, 0, 0, scene);
+    part(GEO.box, dark, 0.42, 0.14, 0.42, x, 2.67, z, 0, 0, 0, scene);
   }
-  // Laundry line: posts + line + muted cloth rectangles (never text).
-  {
-    const [x1, z1, x2, z2] = LAUNDRY;
-    const len = Math.hypot(x2 - x1, z2 - z1);
-    part(GEO.cyl8, darkWood, 0.18, 2.2, 0.18, x1, 1.1, z1, 0, 0, 0, scene);
-    part(GEO.cyl8, darkWood, 0.18, 2.2, 0.18, x2, 1.1, z2, 0, 0, 0, scene);
-    const line = part(GEO.cyl8, M(COL_ROCK), 0.04, len, 0.04, (x1 + x2) / 2, 2.0, (z1 + z2) / 2, 0, 0, Math.PI / 2, scene);
-    line.castShadow = false;
-    for (let i = 0; i < 4; i++) {
-      const t = 0.15 + (i / 3) * 0.7;
-      const c = part(GEO.box, M(COL_CLOTH[i % 3]), 0.45, 0.6, 0.03,
-        x1 + (x2 - x1) * t, 1.65, z1 + (z2 - z1) * t, 0, 0, 0, scene);
-      c.castShadow = false;
-    }
-  }
-  // Flower pots by doors.
-  for (const [x, z] of POTS) {
-    part(GEO.cyl8, M(COL_DOOR), 0.32, 0.25, 0.32, x, 0.125, z, 0, 0, 0, scene);
-    for (let i = 0; i < 3; i++) {
-      part(GEO.ico, M(COL_FLOWER[i % 3]), 0.07, 0.07, 0.07,
-        x - 0.08 + i * 0.08, 0.32, z + (i % 2) * 0.08, 0, 0, 0, scene);
-    }
-  }
+  // Retired by issue #14 (visual-only, no colliders): the laundry line and
+  // the flower pots were hut-door dressing and read as dollhouse clutter
+  // against the monoliths.
   // Big bushes (colliders) + small planted bushes at hut corners (visual).
   BUSH_BIG.forEach(([x, z, r], i) => {
     part(GEO.ico, M(COL_BUSH[i % 3]), r, r * 0.75, r, x, r * 0.55, z, 0, i, 0, scene);
@@ -1841,7 +1897,8 @@ export function buildLevel(scene) {
   buildScatter(scene);
   buildWater(scene);
   buildBanks(scene);
-  buildReeds(scene);
+  // buildReeds retired by issue #14: reeds lined the natural channel banks,
+  // which are now straight concrete walls (reeds would sit inside the walls).
   buildBridges(scene);
   buildWalls(scene);
   buildHills(scene);

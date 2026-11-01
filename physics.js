@@ -261,7 +261,9 @@ export function createStaticLevel(world) {
     addBox(bx, y, chanMid + BRIDGE_SPAN / 4, bw, BRIDGE_THICK, slopeLen, slopeAng, 0, 0, true);
   }
 
-  // Hut bodies (roofs are above reach; body collider blocks entry).
+  // Village blocks (issue #14): full-height, full-footprint boxes matching the
+  // concrete monolith visuals (crowns step inward, so the box is conservative).
+  // Same XZ/rotation as the old hut bodies, so road/plaza clearance is unchanged.
   for (const [hx, hz, rotY, , , bodyH] of HUTS) {
     const h = bodyH || HUT_BODY[1];
     addBox(hx, h / 2, hz, HUT_BODY[0], h, HUT_BODY[2], 0, rotY, 0);

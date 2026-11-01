@@ -144,7 +144,7 @@ export const ARENA_CENTER = [58, 0];
 export const SHORE_X = -52;
 
 // Boundary walls. [cx, cy, cz, sx, sy, sz, style]
-// Styles: fence (village), dune (beach), treeline (forest), rock (pass/arena).
+// Styles: concrete (village, issue #14), dune (beach), treeline (forest), rock (pass/arena).
 export const WALLS = [
   // Beach: tall north/south walls spanning all shelf levels (y -6..2), and a
   // low dune ridge along the shore with a pier gap (z 4..6).
@@ -153,9 +153,11 @@ export const WALLS = [
   [SHORE_X, -5.4, -8.5, 1, 1.2, 25, 'dune'],
   [SHORE_X, -5.4, 13.5, 1, 1.2, 15, 'dune'],
   // Village: south + east segments (pass opening z in [-6,6]).
-  [0, 1, 20.5, 42, 2, 1, 'fence'],
-  [20.5, 1, -13.25, 1, 2, 14.5, 'fence'],
-  [20.5, 1, 13.25, 1, 2, 14.5, 'fence'],
+  // Issue #14: concrete + planting instead of wood + hedge. Same line,
+  // same backstop rule — only the dressing material changes.
+  [0, 1, 20.5, 42, 2, 1, 'concrete'],
+  [20.5, 1, -13.25, 1, 2, 14.5, 'concrete'],
+  [20.5, 1, 13.25, 1, 2, 14.5, 'concrete'],
   // Forest: west, east, north.
   [-20.5, 1, -40, 1, 2, 42, 'treeline'],
   [20.5, 1, -40, 1, 2, 42, 'treeline'],
@@ -286,20 +288,23 @@ export const ROCKS = [
   [-59, -2, 1.0, -6.5], // sea rock
 ];
 
-// Huts: [x, z, rotY, bodyTone, roofTone, bodyH, roofKind].
-// Doors face the plaza, a road, or a bridge; rotations vary widely.
-// roofKind: 0 = pyramid, 1 = pitched gable. Footprint stays 4 x 3.5.
+// Village blocks (issue #14 Brutalist rework): [x, z, rotY, bodyTone, roofTone, bodyH, roofKind].
+// Same XZ footprints and rotations as the old huts (layout unchanged: plaza,
+// roads, spurs, and sightlines keep their clearance), but the bodies are now
+// concrete monoliths 8-14x the player cube height. Plaza-facing blocks sit at
+// the tall end; secondary blocks at the low end. bodyTone picks the concrete
+// shade (0 light / 1 dark); roofTone picks the stepped-crown variant.
 export const HUTS = [
-  [-13, 12.5, 2.03, 0, 0, 2.5, 1], // faces west bridge
-  [13, 12.5, -2.03, 1, 1, 2.5, 0], // faces east bridge
-  [-13, -12, 0.83, 1, 2, 2.5, 1], // faces plaza
-  [13, -12, -0.83, 0, 1, 2.5, 0], // faces plaza
-  [-6, -14, 1.45, 0, 0, 2.0, 0], // faces north road
-  [11.5, 4.5, 3.06, 1, 2, 2.5, 1], // faces east road (clear of the plaza camera orbit)
-  [-14, -4.5, 0.15, 0, 1, 2.0, 0], // faces west road
+  [-13, 12.5, 2.03, 0, 0, 9, 1], // west bridge block
+  [13, 12.5, -2.03, 1, 1, 8, 0], // east bridge block
+  [-13, -12, 0.83, 1, 2, 13, 1], // plaza block (tall)
+  [13, -12, -0.83, 0, 1, 12, 0], // plaza block (tall)
+  [-6, -14, 1.45, 0, 0, 9.5, 0], // north road block
+  [11.5, 4.5, 3.06, 1, 2, 10.5, 1], // east road block (clear of the plaza camera orbit)
+  [-14, -4.5, 0.15, 0, 1, 8.5, 0], // west road block
 ];
-// Per-hut detail features from issue #5 section 5 (each hut gets 2+; doors
-// are upgraded on all huts). Windows sit on the door face.
+// Retired by issue #14: the timber/shutter/flowerbox hut dressing is gone.
+// Kept (unused) so the shape of the old spec stays visible in one place.
 export const HUT_FEATURES = [
   ['timber', 'chimney', 'porch'],
   ['windows', 'flowerbox', 'wallbase'],
@@ -309,7 +314,7 @@ export const HUT_FEATURES = [
   ['timber', 'chimney'],
   ['porch', 'wallbase'],
 ];
-export const HUT_BODY = [4, 2.5, 3.5]; // sx, sy, sz (sy is the default; per-hut bodyH wins)
+export const HUT_BODY = [4, 2.5, 3.5]; // sx, sy, sz footprint (sy unused; per-block bodyH wins)
 
 // Spur paths from hut doors to roads/bridges/plaza. [cx, cz, sx, sz, rotY].
 export const SPURS = [
@@ -386,7 +391,7 @@ export const BUSH_BIG = [
   [12.3, 7.7, 0.9],
   [-4, 7.6, 0.8],
 ];
-// Flower pots (visual): [x, z].
+// Flower pots (visual): [x, z]. Retired by issue #14 (hut-door dressing).
 export const POTS = [
   [-10.6, 12.6],
   [10.6, 12.6],
@@ -411,6 +416,7 @@ export const PATCHES = [
   [-9.5, -11.5, 1.0, 'grass'],
 ];
 // Laundry line: [x1, z1, x2, z2] (posts + line + cloth, visual).
+// Retired by issue #14 (hut-door dressing, dollhouse clutter).
 export const LAUNDRY = [-9, -16, -11, -16];
 // Gates: beach (shore road) and forest (treeline) posts + beam.
 // [x, z, rotY, postH, halfGap]. Posts at local x +/- halfGap.
@@ -459,7 +465,7 @@ export const ARCH = { x: 22, pillarGap: 3, pillarSize: 1.2, pillarH: 3, lintelH:
 
 // Weapon pickups: [id, x, baseY, z].
 export const PICKUPS = [
-  ['dagger', 0, 0.8, 0],
+  ['dagger', 0, 1.8, 0], // floats over the concrete monolith pedestal (cap top ~1.6)
   ['sword', -49, -5.2, 3], // floats over its cove pedestal (beach base -6)
   ['hammer', -11, 1.0, -53],
 ];
@@ -599,7 +605,8 @@ export const SUN_COLOR = 0xfff2dd;
 export const SUN_INTENSITY = 1.4;
 export const SUN_OFFSET = [12, 18, 8]; // relative to player
 export const SHADOW_MAP_SIZE = 1024;
-export const SHADOW_EXTENT = 30; // half-width of shadow camera box
+export const SHADOW_EXTENT = 40; // half-width of shadow camera box (widened for the tall village slabs, issue #14)
+export const SHADOW_FAR = 120; // shadow camera depth (covers the slab tops, issue #14)
 
 // Palette (zone ground tones; lava red is the only saturated color).
 export const COL_VILLAGE_GROUND = 0xada07c;
@@ -634,6 +641,14 @@ export const COL_GULL = 0xe5e0d2;
 export const COL_CLOUD = 0xf5f2e8;
 export const COL_NET = 0x9aa08e;
 export const COL_WALL_FENCE = 0x7a6248;
+export const COL_WALL_CONCRETE = 0x8f8e8a; // village boundary dressing (issue #14)
+// Brutalist village palette (issue #14): raw board-marked concrete in two
+// shared shades, near-black inset windows. Matte throughout. Lava red stays
+// the only saturated color; the warm sand ground and muted green planting
+// are untouched.
+export const COL_CONCRETE = 0x9b9b97;
+export const COL_CONCRETE_DARK = 0x84837f;
+export const COL_WINDOW = 0x17191c;
 export const COL_WALL_DUNE = 0xbfae82;
 export const COL_WALL_TREELINE = 0x3d4a33;
 export const COL_WALL_ROCK = 0x3d3844;
