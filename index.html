@@ -18,6 +18,18 @@
 </head>
 <body>
 <div id="app"></div>
+<button id="muteBtn" class="mute-btn" aria-label="toggle sound">
+  <svg id="soundOnIcon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+    <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+    <path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+  <svg id="soundOffIcon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" hidden>
+    <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/>
+    <line x1="16" y1="9" x2="22" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="22" y1="9" x2="16" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>
+</button>
 <div id="gameover" class="overlay" hidden>
   <div class="panel">
     <svg viewBox="0 0 64 64" width="120" height="120" aria-hidden="true">

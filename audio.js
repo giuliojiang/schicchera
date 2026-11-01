@@ -1,9 +1,28 @@
 // Raw WebAudio, all sounds synthesized. Never blocks the render loop.
-import { CHARGE_TONE_BASE, CHARGE_TONE_GAIN, CHARGE_TONE_TOP } from './constants.js';
+import {
+  CHARGE_TONE_BASE,
+  CHARGE_TONE_GAIN,
+  CHARGE_TONE_TOP,
+  MUSIC_LOCK_TAU,
+  MUSIC_MASTER_GAIN,
+  MUSIC_STOP_TAU,
+  MUSIC_TRACK_LEN,
+  MUSIC_UNLOCK_TAU,
+} from './constants.js';
 
 let ctx = null;
 let chargeOsc = null;
 let chargeGain = null;
+
+// Single 🔊/🔇 toggle (issue #11 §3): mutes music and SFX together, persisted
+// like the menu toggle. SFX guards read it at creation time; the roll bed and
+// live charge/wind-up gains are zeroed in setMuted below.
+let muted = false;
+try {
+  muted = localStorage.getItem('schicchera_muted') === '1';
+} catch {
+  muted = false;
+}
 
 export function ensureAudio() {
   if (ctx) {
@@ -23,6 +42,7 @@ export function ensureAudio() {
 
 // Charge tone: pitch driven by the same quadratic fraction as speed.
 export function startCharge() {
+  if (muted) return;
   const ac = ensureAudio();
   if (!ac) return;
   stopCharge(0.01);
@@ -78,6 +98,7 @@ export function stopCharge(release = 0.05) {
 
 // Flick release: short pitch sweep thwip, louder with charge.
 export function playFlick(strength01) {
+  if (muted) return;
   const ac = ensureAudio();
   if (!ac) return;
   try {
@@ -101,6 +122,7 @@ export function playFlick(strength01) {
 
 // Weapon pickup: bright chime, pitch rises with each consecutive pickup.
 export function playPickup(count) {
+  if (muted) return;
   const ac = ensureAudio();
   if (!ac) return;
   try {
@@ -129,6 +151,7 @@ let bossOsc = null;
 let bossGain = null;
 
 export function startBossWindup(dur) {
+  if (muted) return;
   const ac = ensureAudio();
   if (!ac) return;
   stopBossWindup(0.01);
@@ -177,6 +200,7 @@ export function stopBossWindup(release = 0.05) {
 
 // Boss bump: heavy thud + downward whoosh.
 export function playBossBump() {
+  if (muted) return;
   const ac = ensureAudio();
   if (!ac) return;
   try {
@@ -210,6 +234,7 @@ export function playBossBump() {
 
 // Damage: dull hit for either party taking 1 HP.
 export function playDamage() {
+  if (muted) return;
   const ac = ensureAudio();
   if (!ac) return;
   try {
@@ -232,6 +257,7 @@ export function playDamage() {
 
 // Victory: short ascending arpeggio.
 export function playVictory() {
+  if (muted) return;
   const ac = ensureAudio();
   if (!ac) return;
   try {
@@ -276,6 +302,7 @@ function getNoiseBuf(ac) {
 // Flick whoosh: short filtered-noise burst on release, through the existing
 // synthesized setup. No files, no samples.
 export function playWhoosh(strength01) {
+  if (muted) return;
   const ac = ensureAudio();
   if (!ac) return;
   const buf = getNoiseBuf(ac);
@@ -326,15 +353,222 @@ export function updateRollNoise(speed, minSpeed, maxGain) {
       rollSrc.start();
     }
     const over = Math.max(0, speed - minSpeed);
-    const target = Math.min(maxGain, (over / 16) * maxGain);
+    const target = muted ? 0.0001 : Math.min(maxGain, (over / 16) * maxGain);
     rollGain.gain.setTargetAtTime(Math.max(0.0001, target), ac.currentTime, 0.1);
   } catch {
     /* ignore */
   }
 }
 
+// Layered music (issue #11): base + one stem per weapon on one 180 s timeline.
+// OGG is primary, MP3 the fallback for browsers without Ogg Vorbis; the
+// format is picked once at boot via canPlayType and never mixed in a run.
+// All four stems start in the same tick with loop=true, so sync is structural:
+// same sample count, same start, same 180 s loop — no drift to correct.
+// (The MP3 loop seam is inaudible: the track fades to silence over its last
+// 2 s before the loop point.)
+const MUSIC_ORDER = ['base', 'dagger', 'sword', 'hammer'];
+let musicExtPick = null;
+let musicBufs = null; // {base, dagger, sword, hammer} AudioBuffers, decoded
+let musicLoad = null; // in-flight preload promise
+let musicNodes = null; // {sources, gains, master, t0} while a run plays
+let musicGen = 0; // start/stop generation: a stop cancels a deferred start
+let heldLayers = new Set(['base']); // base is the run's ambient bed, always on
+
+function pickMusicExt() {
+  if (musicExtPick) return musicExtPick;
+  try {
+    const el = document.createElement('audio');
+    musicExtPick = el.canPlayType && el.canPlayType('audio/ogg') ? 'ogg' : 'mp3';
+  } catch {
+    musicExtPick = 'ogg';
+  }
+  return musicExtPick;
+}
+
+// Decode all four stems before the run starts. Preload during boot; a run
+// never starts with a subset of stems — startRunMusic waits for this.
+export function preloadMusic() {
+  if (musicLoad) return musicLoad;
+  musicLoad = (async () => {
+    try {
+      const ext = pickMusicExt();
+      const ac = ensureAudio();
+      if (!ac) return false;
+      const parts = await Promise.all(
+        MUSIC_ORDER.map(async (name) => {
+          const res = await fetch(`audio/layer-${name}.${ext}`);
+          if (!res.ok) throw new Error(`music stem missing: ${name}`);
+          const buf = await ac.decodeAudioData(await res.arrayBuffer());
+          return [name, buf];
+        })
+      );
+      musicBufs = Object.fromEntries(parts);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  return musicLoad;
+}
+
+// Start all four stems together from t=0 (a fresh run = a fresh track).
+// Called on the first-gesture audio unlock, same path as the SFX. Safe to
+// call repeatedly: a playing run is left alone, missing stems defer the start
+// until preload resolves instead of starting a partial set.
+export function startRunMusic() {
+  const ac = ensureAudio();
+  if (!ac || musicNodes) return !!musicNodes;
+  if (!musicBufs) {
+    const gen = musicGen;
+    preloadMusic().then((ok) => {
+      if (ok && gen === musicGen && !musicNodes) startRunMusic();
+    });
+    return false;
+  }
+  try {
+    const master = ac.createGain();
+    master.gain.value = muted ? 0 : MUSIC_MASTER_GAIN;
+    master.connect(ac.destination);
+    const t = ac.currentTime + 0.05;
+    const sources = [];
+    const gains = {};
+    for (const name of MUSIC_ORDER) {
+      const src = ac.createBufferSource();
+      src.buffer = musicBufs[name];
+      src.loop = true;
+      const g = ac.createGain();
+      g.gain.value = 0;
+      src.connect(g).connect(master);
+      src.start(t, 0);
+      sources.push(src);
+      gains[name] = g;
+    }
+    musicNodes = { sources, gains, master, t0: t };
+    gains.base.gain.setTargetAtTime(1, t, 0.1);
+    for (const name of heldLayers) {
+      if (name !== 'base' && gains[name]) gains[name].gain.setTargetAtTime(1, t, MUSIC_UNLOCK_TAU);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Weapon collected: fade its layer 0->1 over ~1 s, on top of the pickup chime.
+export function unlockMusicLayer(id) {
+  if (MUSIC_ORDER.includes(id)) heldLayers.add(id);
+  try {
+    if (musicNodes && musicNodes.gains[id]) {
+      musicNodes.gains[id].gain.setTargetAtTime(1, ctx.currentTime, MUSIC_UNLOCK_TAU);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+// Weapon lost to damage: fade its layer out over ~0.5 s (default — layers
+// follow current attachments, so the music thins as HP drops). The latch
+// alternative is a one-line change here (skip this fade); it needs Giulio's
+// word to switch, so the default ships.
+export function lockMusicLayer(id) {
+  heldLayers.delete(id);
+  try {
+    if (musicNodes && musicNodes.gains[id]) {
+      musicNodes.gains[id].gain.setTargetAtTime(0, ctx.currentTime, MUSIC_LOCK_TAU);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+// Game over: ramp every stem to 0 over ~1 s, then stop the sources.
+// On victory this is NOT called — the held layers keep playing under the
+// victory arpeggio, and die with the page when leaving the victory screen.
+export function stopRunMusic() {
+  musicGen++; // cancel any deferred start
+  heldLayers = new Set(['base']);
+  if (!musicNodes || !ctx) {
+    musicNodes = null;
+    return;
+  }
+  const { sources, gains, master } = musicNodes;
+  musicNodes = null;
+  try {
+    const t = ctx.currentTime;
+    for (const name of MUSIC_ORDER) gains[name].gain.setTargetAtTime(0, t, MUSIC_STOP_TAU);
+    setTimeout(() => {
+      for (const s of sources) {
+        try {
+          s.stop();
+        } catch {
+          /* ignore */
+        }
+      }
+      try {
+        master.disconnect();
+      } catch {
+        /* ignore */
+      }
+    }, MUSIC_STOP_TAU * 1000 * 4 + 300);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isMuted() {
+  return muted;
+}
+
+// The single toggle: music master to 0 plus SFX silenced at creation, live
+// one-shots zeroed. Sources are never stopped, so unmuting resumes the track
+// at the same position.
+export function setMuted(m) {
+  muted = !!m;
+  try {
+    localStorage.setItem('schicchera_muted', muted ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+  if (!ctx) return muted;
+  try {
+    const t = ctx.currentTime;
+    if (musicNodes) musicNodes.master.gain.setTargetAtTime(muted ? 0 : MUSIC_MASTER_GAIN, t, 0.05);
+    for (const g of [chargeGain, bossGain, rollGain]) {
+      if (g) g.gain.setTargetAtTime(0.0001, t, 0.03);
+    }
+  } catch {
+    /* ignore */
+  }
+  return muted;
+}
+
+// Debug snapshot for the §14 hook and the issue #11 acceptance tests: stem
+// gains plus the shared track position (one clock, so all stems agree).
+export function musicSnapshot() {
+  const layers = {};
+  for (const name of MUSIC_ORDER) {
+    try {
+      layers[name] = musicNodes ? +musicNodes.gains[name].gain.value.toFixed(4) : 0;
+    } catch {
+      layers[name] = 0;
+    }
+  }
+  let time = 0;
+  try {
+    if (musicNodes && ctx) {
+      const len = (musicBufs && musicBufs.base && musicBufs.base.duration) || MUSIC_TRACK_LEN;
+      time = +((((ctx.currentTime - musicNodes.t0) % len) + len) % len).toFixed(3);
+    }
+  } catch {
+    /* ignore */
+  }
+  return { ext: musicExtPick || 'ogg', ready: !!musicBufs, playing: !!musicNodes, layers, musicTime: time };
+}
+
 // Collision thud, volume scaled by impact velocity.
 export function playThud(impact) {
+  if (muted) return;
   const ac = ctx || ensureAudio();
   if (!ac || !(impact > 0.5)) return;
   try {

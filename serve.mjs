@@ -18,6 +18,10 @@ const types = {
   '.jpg': 'image/jpeg',
   '.svg': 'image/svg+xml',
   '.wasm': 'application/wasm',
+  '.ogg': 'audio/ogg',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.glb': 'model/gltf-binary',
 };
 
 const server = http.createServer((req, res) => {

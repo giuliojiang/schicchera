@@ -125,6 +125,9 @@ import {
 } from './level.js';
 import {
   ensureAudio,
+  isMuted,
+  lockMusicLayer,
+  musicSnapshot,
   playBossBump,
   playDamage,
   playFlick,
@@ -132,13 +135,27 @@ import {
   playThud,
   playVictory,
   playWhoosh,
+  preloadMusic,
+  setMuted,
   startBossWindup,
   startCharge,
+  startRunMusic,
   stopBossWindup,
   stopCharge,
+  stopRunMusic,
+  unlockMusicLayer,
   updateCharge,
   updateRollNoise,
 } from './audio.js';
+
+// Layered music stems (issue #11) decode during boot so the run never starts
+// with a partial set; playback itself starts on the first-gesture unlock below.
+preloadMusic();
+
+function unlockAudioAndMusic() {
+  ensureAudio();
+  startRunMusic();
+}
 
 const app = document.getElementById('app');
 
@@ -428,7 +445,9 @@ function applyCombat(out) {
     playerFlashT = DAMAGE_FLASH_TIME;
     playDamage();
     if (pieces.length > 0) {
-      detachWeapon(playerMesh, playerBody, pieces.pop()); // last attached, first lost
+      const lost = pieces.pop();
+      detachWeapon(playerMesh, playerBody, lost); // last attached, first lost
+      lockMusicLayer(lost); // default: the music thins as HP drops
     } else {
       loseFight();
     }
@@ -458,6 +477,8 @@ function winFight() {
   world.removeBody(bossBody);
   attachBossBall(CANNON, playerMesh, playerBody, bossMesh);
   bossAttached = true;
+  // Victory keeps the held layers playing under the arpeggio (issue #11 §3):
+  // the fully loaded character gets the fullest mix. Sources die with the page.
   playVictory();
   document.getElementById('victory').hidden = false;
 }
@@ -470,6 +491,7 @@ function loseFight() {
   streaks.hide();
   bossLines.hide();
   stopBossWindup();
+  stopRunMusic(); // all stems to 0 over ~1 s, then stopped
   document.getElementById('gameover').hidden = false;
 }
 
@@ -552,11 +574,18 @@ window.addEventListener('keydown', (e) => {
     input.right = true;
     e.preventDefault();
   } else if (e.code === 'Space' || e.code === 'Enter') {
-    ensureAudio();
+    unlockAudioAndMusic();
     if (!e.repeat) beginCharge();
+    e.preventDefault();
+  } else if (e.code === 'KeyM' && !e.repeat) {
+    setMuted(!isMuted());
+    syncMuteBtn();
     e.preventDefault();
   }
 });
+
+// First-gesture unlock for pointer input too (same path as the keys).
+window.addEventListener('pointerdown', unlockAudioAndMusic);
 
 window.addEventListener('keyup', (e) => {
   if (e.code === 'KeyA' || e.code === 'ArrowLeft') input.left = false;
@@ -829,6 +858,7 @@ function updateWorld(dt) {
       attachWeapon(THREE, CANNON, playerMesh, playerBody, p.id);
       playPickup(pieces.length);
       pieces.push(p.id);
+      unlockMusicLayer(p.id); // its stem fades in over ~1 s, under the chime
     }
   }
 }
@@ -972,6 +1002,19 @@ playerMesh.position.set(playerBody.position.x, playerBody.position.y, playerBody
 bossMesh.position.set(bossBody.position.x, bossBody.position.y, bossBody.position.z);
 document.getElementById('retryBtn').addEventListener('click', () => location.reload());
 document.getElementById('replayBtn').addEventListener('click', () => location.reload());
+
+// Sound toggle (issue #11 §3): one icon button mutes music and SFX together.
+function syncMuteBtn() {
+  const off = isMuted();
+  document.getElementById('soundOnIcon').hidden = off;
+  document.getElementById('soundOffIcon').hidden = !off;
+}
+document.getElementById('muteBtn').addEventListener('click', () => {
+  unlockAudioAndMusic();
+  setMuted(!isMuted());
+  syncMuteBtn();
+});
+syncMuteBtn();
 updateCamera(1);
 renderer.render(scene, camera);
 requestAnimationFrame((t) => {
@@ -1007,6 +1050,7 @@ if (params.has('debug') || params.has('autoplay')) {
           zone,
           pieces: [...pieces],
           pickups: pickups.map((p) => ({ id: p.id, taken: p.taken })),
+          music: musicSnapshot(),
           boss: {
             pos: [
               +bossBody.position.x.toFixed(4),

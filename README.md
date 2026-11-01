@@ -18,7 +18,8 @@ sword cove, shore dressing, pier), navigable forest grove (thicket walls,
 hammer grove, stream with bridge and stepping stones), collectible weapons
 that attach with mass + colliders, bump-attacking ball boss with a
 momentum-rules fight (wind-up telegraphs, piece loss, win/lose icon screens,
-victory boss-ball attach), per-zone fog, synthesized audio,
+victory boss-ball attach), per-zone fog, synthesized audio plus a layered
+180 s music track (base bed + one stem per weapon; the mix thickens with HP),
 `?debug=1` state bridge, Futurism force lines (ghost echoes, flick streaks,
 wind-up lines, roll/whoosh noise — visual-only, past motion only). No build step.
 
@@ -35,6 +36,7 @@ Open http://127.0.0.1:8765/ in a browser.
 
 - **A / D** — orbit the camera around the cube (this is the aim)
 - **Space / Enter** — hold to charge, release to flick
+- **M** or the speaker icon (top right) — mute music + SFX together
 
 Debug hooks: `?debug=1` exposes `window.__GAME__` (snapshot, `step()`,
 `setSeed()`); `?autoplay&seed=N` runs a scripted input loop;

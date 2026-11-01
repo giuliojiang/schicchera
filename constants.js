@@ -110,6 +110,15 @@ export const BOSS_LINE_OPACITY = 0.5; // full wind-up ceiling; pulses below it
 export const ROLL_NOISE_MIN_SPEED = 4; // u/s, bed silent below this
 export const ROLL_NOISE_MAX = 0.025; // gain ceiling: garnish, never masks cues
 
+// Layered music (issue #11). Four 180 s stems on one timeline: base + one
+// per weapon. Unlock ramps 0->1 in ~1 s (tau 0.3); damage fade-out ~0.5 s;
+// game-over ramp to 0 ~1 s. Master bed sits below the SFX cues, never masking.
+export const MUSIC_TRACK_LEN = 180; // s, all stems share one timeline
+export const MUSIC_MASTER_GAIN = 0.8; // bed below the SFX cues
+export const MUSIC_UNLOCK_TAU = 0.3; // s, weapon-collect fade-in
+export const MUSIC_LOCK_TAU = 0.15; // s, damage fade-out (default: layers follow HP)
+export const MUSIC_STOP_TAU = 0.3; // s, game-over fade to 0
+
 // Audio tuning.
 export const CHARGE_TONE_BASE = 150; // Hz at zero charge
 export const CHARGE_TONE_TOP = 620; // Hz at full charge

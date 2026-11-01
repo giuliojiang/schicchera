@@ -43,6 +43,7 @@ export function initDebug(ctx) {
         pieces: s.pieces,
       },
       boss: s.boss || null,
+      music: s.music || null,
       charge01: +s.charge01.toFixed(4),
       charging: !!s.charging,
       grounded: !!s.grounded,

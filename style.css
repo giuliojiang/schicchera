@@ -65,3 +65,28 @@ html, body {
 .icon-btn:hover {
   background: rgba(60, 40, 24, 0.8);
 }
+
+/* Sound toggle: icon pictogram only, no text (spec section 11). */
+.mute-btn {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid #f2e6c8;
+  background: rgba(20, 14, 10, 0.6);
+  color: #f2e6c8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 10;
+  opacity: 0.75;
+}
+
+.mute-btn:hover {
+  opacity: 1;
+  background: rgba(60, 40, 24, 0.8);
+}
