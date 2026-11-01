@@ -104,6 +104,66 @@ export function bossNext(state, t, { interval, windup, bumpTime }) {
   return state;
 }
 
+// Edge safety net (issue #13). Pure: every bound arrives as data, so the sim
+// and any headless check share one definition of "out of the world".
+// Water volume: below SEA_LEVEL inside the beach/shore region.
+export function isInWater(x, y, z, level, region) {
+  return y < level && x < region.xMax && z >= region.z0 && z <= region.z1;
+}
+
+// Lava moat annulus: horizontal distance from the arena center inside the moat.
+export function isInMoat(x, z, cx, cz, moatIn, moatOut) {
+  const d = Math.hypot(x - cx, z - cz);
+  return d >= moatIn && d <= moatOut;
+}
+
+// Leaving the map horizontally: distance from the map center beyond MAP_RADIUS.
+export function isOutOfBounds(x, z, cx, cz, radius) {
+  return Math.hypot(x - cx, z - cz) > radius;
+}
+
+// Safe-spot recording: grounded, vertical speed near zero, above the fall
+// threshold, and inside none of the hazard volumes.
+export function canRecordSafe({ grounded, vy, y, fallThreshold, safeVy, inWater, inMoat, outOfBounds }) {
+  return (
+    grounded &&
+    Math.abs(vy) <= safeVy &&
+    y > fallThreshold &&
+    !inWater &&
+    !inMoat &&
+    !outOfBounds
+  );
+}
+
+// Moat exit rule: the moat only catches players whose last safe spot is on
+// the fighting disc (leaving the arena). Entering from the pass crosses the
+// moat freely until the first safe spot lands on the disc.
+export function isMoatExit(inMoat, safeX, safeZ, cx, cz, moatIn) {
+  return inMoat && Math.hypot(safeX - cx, safeZ - cz) < moatIn;
+}
+
+// Forest rim thicket band (issue #13 §2): gap-less impassable spacing on the
+// outer west/east/north edges, door gap at the village gate on the south.
+// Returns full tree tuples [x, z, trunkH, canopyR, kind, greenIdx] so physics
+// trunks and level visuals share one layout and can never drift apart.
+export function forestRimTrees({ x0, x1, z0, z1, inset, spacing, gateHalf }) {
+  const trees = [];
+  let i = 0;
+  const push = (x, z) => {
+    trees.push([+x.toFixed(3), +z.toFixed(3), 3.0, 1.7, i % 2 === 0 ? 'cone' : 'blob', i % 4]);
+    i++;
+  };
+  for (let z = z0 + inset; z <= z1 - inset + 1e-6; z += spacing) {
+    push(x0 + inset, z);
+    push(x1 - inset, z);
+  }
+  for (let x = x0 + inset; x <= x1 - inset + 1e-6; x += spacing) {
+    push(x, z0 + inset);
+    if (Math.abs(x) >= gateHalf) push(x, z1 - inset);
+  }
+  return trees;
+}
+
 // Seeded RNG (mulberry32) for any future gameplay randomness.
 export function mulberry32(seed) {
   let a = seed >>> 0;

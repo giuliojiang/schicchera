@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import {
   ARENA_CENTER,
+  ARENA_MOAT_IN,
+  ARENA_MOAT_OUT,
   ARENA_RING_R,
   BOSS_BUMP_SPEED,
   BOSS_BUMP_TIME,
@@ -66,11 +68,19 @@ import {
   LAUNCH_STRETCH_TIME,
   MAX_FRAME_DT,
   MOMENTUM_TIE_EPS,
+  MAP_CENTER,
+  MAP_RADIUS,
   ORBIT_SPEED,
   PICKUP_TOUCH_DIST,
   PICKUPS,
   PLAYER_MAX_FLICK_SPEED,
   PLAYER_SIZE,
+  PLAYER_SPAWN,
+  RESPAWN_FADE_TIME,
+  SAFE_VY,
+  SEA_LEVEL,
+  SEA_REGION,
+  FALL_Y_THRESHOLD,
   ROLL_NOISE_MAX,
   ROLL_NOISE_MIN_SPEED,
   SPEED_CLAMP,
@@ -102,9 +112,14 @@ import { createBossLines, createGhostTrail, createStreakPool } from './futurism.
 import {
   applyFlickVelocity,
   bossNext,
+  canRecordSafe,
   chargeFraction,
   clampSpeed,
   flickSpeed,
+  isInMoat,
+  isInWater,
+  isMoatExit,
+  isOutOfBounds,
   momentum,
   resolveCombat,
   zoneOf,
@@ -434,6 +449,47 @@ function releaseFlick() {
 // This runs inside a collide callback, i.e. mid-physics-step, so it only
 // records the outcome: bodies are added/removed after the step completes,
 // since mutating the world mid-step corrupts the solver.
+// Respawn safety net (issue #13 §1): the last grounded spot, and the fade.
+// Recovery is not damage: no HP/piece change, no combat cooldown touched.
+let safeSpot = { x: PLAYER_SPAWN[0], y: PLAYER_SPAWN[1], z: PLAYER_SPAWN[2] };
+let respawnFlash = 0; // overlay fade timer, decays over RESPAWN_FADE_TIME
+let lastRespawn = null; // {frame, reason} for the debug bridge
+const respawnFadeEl = document.getElementById('respawnFade');
+
+function edgeHazards() {
+  const px = playerBody.position.x;
+  const py = playerBody.position.y;
+  const pz = playerBody.position.z;
+  const inWater = isInWater(px, py, pz, SEA_LEVEL, SEA_REGION);
+  const inMoat = isInMoat(px, pz, ARENA_CENTER[0], ARENA_CENTER[1], ARENA_MOAT_IN, ARENA_MOAT_OUT);
+  const oob = isOutOfBounds(px, pz, MAP_CENTER[0], MAP_CENTER[1], MAP_RADIUS);
+  return { px, py, pz, inWater, inMoat, oob };
+}
+
+function doRespawn(reason) {
+  playerBody.position.set(safeSpot.x, safeSpot.y, safeSpot.z);
+  playerBody.velocity.set(0, 0, 0);
+  playerBody.angularVelocity.set(0, 0, 0);
+  playerBody.wakeUp();
+  // Charge reset: no instant flick on recovery.
+  if (charging) {
+    charging = false;
+    holdTime = 0;
+    stopCharge();
+    playerMotes.dissipate();
+  }
+  // Snap the camera anchor (#7) so there is no cross-map swoop; the #12
+  // pull-in still applies from the new position.
+  anchorX = safeSpot.x;
+  anchorZ = safeSpot.z;
+  smoothGround = safeSpot.y;
+  smoothVelX = 0;
+  smoothVelZ = 0;
+  respawnFlash = RESPAWN_FADE_TIME;
+  if (respawnFadeEl) respawnFadeEl.style.opacity = '1';
+  lastRespawn = { frame: frames, reason };
+}
+
 let pendingCombat = null; // 'player' | 'boss', applied in stepSim after the step
 
 function resolveBossTouch() {
@@ -929,6 +985,40 @@ function stepSim(dt) {
   grounded = isGrounded(world, playerBody, groundBodies);
   applyDrag(playerBody, grounded, false);
   applyDrag(bossBody, true, true);
+  // Respawn safety net (issue #13 §1): water, below-threshold, and
+  // out-of-bounds trigger anywhere; the lava moat only catches exits (a safe
+  // spot on the disc means the player is leaving, not entering). Recovery is
+  // never damage: HP and pieces are untouched.
+  {
+    const hz = edgeHazards();
+    const fellBelow = hz.py < FALL_Y_THRESHOLD;
+    const moatExit = isMoatExit(
+      hz.inMoat, safeSpot.x, safeSpot.z, ARENA_CENTER[0], ARENA_CENTER[1], ARENA_MOAT_IN
+    );
+    let trigger = null;
+    if (hz.inWater) trigger = 'water';
+    else if (fellBelow) trigger = 'fall';
+    else if (hz.oob) trigger = 'oob';
+    else if (moatExit) trigger = 'moat';
+    if (trigger) {
+      doRespawn(trigger);
+    } else if (
+      canRecordSafe({
+        grounded,
+        vy: playerBody.velocity.y,
+        y: hz.py,
+        fallThreshold: FALL_Y_THRESHOLD,
+        safeVy: SAFE_VY,
+        inWater: hz.inWater,
+        inMoat: hz.inMoat,
+        outOfBounds: hz.oob,
+      })
+    ) {
+      safeSpot.x = hz.px;
+      safeSpot.y = hz.py + 0.1; // settle cleanly instead of in contact
+      safeSpot.z = hz.pz;
+    }
+  }
   updateBoss(dt);
   updateWorld(dt);
 
@@ -1029,6 +1119,13 @@ function frame(now) {
 
     stepSim(dt);
 
+    // Respawn fade (issue #13 §1): a visual blink only, no text. Control is
+    // already restored; this just covers the snap.
+    if (respawnFlash > 0) {
+      respawnFlash = Math.max(0, respawnFlash - dt);
+      if (respawnFadeEl) respawnFadeEl.style.opacity = String(respawnFlash / RESPAWN_FADE_TIME);
+    }
+
     updateCamera(frames === 0 ? 1 : dt);
 
     renderer.render(scene, camera);
@@ -1098,6 +1195,8 @@ if (params.has('debug') || params.has('autoplay')) {
           camBlockers: cameraBlockers.length,
           zone,
           pieces: [...pieces],
+          safeSpot: { ...safeSpot },
+          lastRespawn: lastRespawn ? { ...lastRespawn } : null,
           pickups: pickups.map((p) => ({ id: p.id, taken: p.taken })),
           music: musicSnapshot(),
           boss: {
@@ -1127,7 +1226,10 @@ if (params.has('debug') || params.has('autoplay')) {
 // reports the outcome in <title> for --dump-dom runs. No rAF needed.
 // Dev-only scripts: &script=win keeps hurling the cube into the boss at max
 // flick speed (naked max always wins); &script=trade arms the cube and parks
-// it still so the boss collects pieces off it.
+// it still so the boss collects pieces off it; &script=moatout records a disc
+// safe spot and then drops the cube in the moat (exit must respawn on the
+// disc); &script=cliff hurls the cube at the pass cliff face (it must stay on
+// the level side).
 {
   const simN = parseInt(params.get('sim') || '0', 10);
   if (Number.isFinite(simN) && simN > 0) {
@@ -1145,6 +1247,15 @@ if (params.has('debug') || params.has('autoplay')) {
         playerBody.velocity.set(PLAYER_MAX_FLICK_SPEED, 0, 0);
         playerBody.angularVelocity.set(0, 0, 0);
       }
+      if (script === 'moatout' && i === 60 && phase === 'playing') {
+        playerBody.position.set(ARENA_CENTER[0] + ARENA_MOAT_IN + 0.4, 1, ARENA_CENTER[1]);
+        playerBody.velocity.set(0, 0, 0);
+        playerBody.angularVelocity.set(0, 0, 0);
+      }
+      if (script === 'cliff' && i > 0 && i % 10 === 0 && phase === 'playing') {
+        playerBody.velocity.set(0, 0, -PLAYER_MAX_FLICK_SPEED);
+        playerBody.angularVelocity.set(0, 0, 0);
+      }
       stepSim(1 / 60);
     }
     updateCamera(1);
@@ -1152,7 +1263,9 @@ if (params.has('debug') || params.has('autoplay')) {
     document.title =
       `sim${simN} ${phase} boss:${bossState}/hp${bossHp}/fight${fightActive ? 1 : 0}` +
       ` pieces:${pieces.join(',') || '-'} mass:${playerBody.mass.toFixed(2)}` +
-      ` ppos:${playerBody.position.x.toFixed(1)},${playerBody.position.z.toFixed(1)}` +
-      ` bpos:${bossBody.position.x.toFixed(1)},${bossBody.position.z.toFixed(1)}`;
+      ` ppos:${playerBody.position.x.toFixed(1)},${playerBody.position.y.toFixed(1)},${playerBody.position.z.toFixed(1)}` +
+      ` bpos:${bossBody.position.x.toFixed(1)},${bossBody.position.z.toFixed(1)}` +
+      ` resp:${lastRespawn ? lastRespawn.reason : '-'}` +
+      ` anchor:${anchorX.toFixed(1)},${anchorZ.toFixed(1)}`;
   }
 }

@@ -26,7 +26,11 @@ momentum-rules fight (wind-up telegraphs, piece loss, win/lose icon screens,
 victory boss-ball attach), per-zone fog, synthesized audio plus a layered
 180 s music track (base bed + one stem per weapon; the mix thickens with HP),
 `?debug=1` state bridge, Futurism force lines (ghost echoes, flick streaks,
-wind-up lines, roll/whoosh noise — visual-only, past motion only). No build step.
+wind-up lines, roll/whoosh noise — visual-only, past motion only), edge safety
+net (sea/lava/fall/out-of-bounds respawn at the last grounded spot with a
+fade and a camera-anchor snap, never damage) with diegetic outer boundaries
+(pass cliffs, village hedges, forest rim thicket, shore rock lip, arena ring;
+invisible backstops behind the dressing). No build step.
 
 ## Run it
 
@@ -46,5 +50,7 @@ Open http://127.0.0.1:8765/ in a browser.
 Debug hooks: `?debug=1` exposes `window.__GAME__` (snapshot, `step()`,
 `setSeed()`); `?autoplay&seed=N` runs a scripted input loop;
 `?at=x,z[,y]&orbit=rad` overrides the spawn for level inspection;
-`?sim=N[&script=win|trade]` runs N fixed steps headlessly and reports the
-outcome in `<title>` (win = scripted victory, trade = scripted piece loss).
+`?sim=N[&script=win|trade|moatout|cliff]` runs N fixed steps headlessly and
+reports the outcome in `<title>` (win = scripted victory, trade = scripted
+piece loss, moatout = arena-exit respawn check, cliff = cliff-face
+impassability check; the title also reports the last respawn reason).

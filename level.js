@@ -124,11 +124,7 @@ import {
   COL_TIDE_POOL,
   COL_TRUNK,
   COL_VILLAGE_GROUND,
-  COL_WALL_CONCRETE,
-  COL_WALL_DUNE,
-  COL_WALL_FENCE,
   COL_WALL_ROCK,
-  COL_WALL_TREELINE,
   COL_WATER,
   COL_WINDOW,
   COL_WOOD_DARK,
@@ -200,16 +196,19 @@ import {
   TIDE_POOLS,
   TREES,
   TRUNK_RADIUS,
+  EDGE_CLIFFS,
+  FOREST_RIM,
+  SHORE_LIP,
   VILLAGE_BARS,
+  VILLAGE_HEDGES,
   VILLAGE_TOWERS,
-  WALLS,
   WELL,
   ZONE_ARENA,
   ZONE_FOREST,
   ZONE_PASS,
   ZONE_VILLAGE,
 } from './constants.js';
-import { arenaRingLayout, mulberry32 } from './game.js';
+import { arenaRingLayout, forestRimTrees, mulberry32 } from './game.js';
 
 function matte(color, extra = {}) {
   return new THREE.MeshStandardMaterial({
@@ -631,33 +630,93 @@ function buildBanks(scene) {
   wall(CHANNEL_Z1 + 0.2, dark);
 }
 
-function buildWalls(scene) {
-  const { light: concrete } = brutalistMats();
-  const mats = {
-    fence: matte(COL_WALL_FENCE),
-    concrete,
-    dune: matte(COL_WALL_DUNE),
-    treeline: matte(COL_WALL_TREELINE),
-    rock: matte(COL_WALL_ROCK),
-  };
-  for (const [x, y, z, sx, sy, sz, style] of WALLS) {
-    if (style === 'none') continue; // invisible shoreline wall
-    const m = box(sx, sy, sz, mats[style], x, y, z);
+// Diegetic outer boundaries (issue #13). No plain walls: tall rock faces on
+// the beach edges and the pass, hedges around the village, and a thickened
+// thicket band on the forest rim. Colliders in physics.js match these
+// transforms exactly (cliffs/hedges box-for-box, rim trees trunk-for-trunk).
+function buildEdgeCliffs(scene) {
+  const rockMat = matte(COL_WALL_ROCK);
+  const capMat = M(COL_ROCK);
+  const rng = mulberry32(77);
+  for (const [cx, cz, lx, lz, baseY, h] of EDGE_CLIFFS) {
+    const m = box(lx, h, lz, rockMat, cx, baseY + h / 2, cz);
     m.userData.blocker = true; // camera raycast blocker (issue #12)
     scene.add(m);
+    // Broken crest: boulders along the top so the face reads as cliff rock,
+    // not a box. Visual-only; the collider top stays flat and conservative.
+    const n = Math.max(3, Math.round(Math.max(lx, lz) / 3));
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n - 0.5;
+      const bx = lx >= lz ? cx + t * lx : cx + (rng() - 0.5) * lz * 0.5;
+      const bz = lx >= lz ? cz + (rng() - 0.5) * lz * 0.5 : cz + t * lz;
+      const r = 0.7 + rng() * 0.9;
+      const b = part(GEO.dodec, capMat, r * 1.4, r, r * 1.2,
+        bx, baseY + h + r * 0.25, bz, 0, rng() * 3, 0, scene);
+      b.userData.blocker = true;
+    }
   }
-  // Village boundary planting (issue #14): muted green bushes softening the
-  // concrete walls. Visual-only, clear of roads and the pass opening.
-  const bushSpots = [];
-  for (let x = -16; x <= 16; x += 4) bushSpots.push([x, 19.2]);
-  for (let z = -11; z <= 11; z += 3.5) {
-    if (Math.abs(z) < 2.6) continue; // east road
-    if (Math.abs(z - 10) < 1.6) continue; // channel mouth
-    bushSpots.push([19.2, z]);
+}
+
+function buildVillageHedges(scene) {
+  const hedgeMat = M(COL_BUSH[1]);
+  const puffMats = COL_BUSH.map((c) => M(c));
+  const rng = mulberry32(78);
+  for (const [cx, cz, lx, lz, baseY, h] of VILLAGE_HEDGES) {
+    part(GEO.box, hedgeMat, lx, h, lz, cx, baseY + h / 2, cz, 0, 0, 0, scene);
+    // Leafy top puffs along the run. Visual-only; the box is the collider.
+    const run = Math.max(lx, lz);
+    const n = Math.max(4, Math.round(run / 1.6));
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n - 0.5;
+      const px = lx >= lz ? cx + t * lx : cx + (rng() - 0.5) * 0.4;
+      const pz = lx >= lz ? cz + (rng() - 0.5) * 0.4 : cz + t * lz;
+      const r = 0.55 + rng() * 0.3;
+      part(GEO.ico, puffMats[(i + (rng() * 3 | 0)) % 3], r * 1.6, r, r * 1.6,
+        px, baseY + h + r * 0.3, pz, 0, rng() * 3, 0, scene).castShadow = false;
+    }
   }
-  bushSpots.forEach(([x, z], i) => {
-    part(GEO.ico, M(COL_BUSH[i % 3]), 0.55, 0.42, 0.55, x, 0.3, z, 0, i * 0.7, 0, scene);
-  });
+}
+
+// Forest rim thicket band (issue #13 §2): the same shared layout as the
+// physics trunks. Dense tall trees, path-side small canopies so the band
+// reads as one thicket wall; the south run leaves the village gate open.
+function buildForestRim(scene) {
+  const trunkMat = matte(COL_TRUNK);
+  const canopyMats = COL_CANOPY.map((c) => matte(c));
+  for (const [x, z, trunkH, canopyR, kind, greenIdx] of forestRimTrees(FOREST_RIM)) {
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(TRUNK_RADIUS, TRUNK_RADIUS * 1.25, trunkH, 7),
+      trunkMat
+    );
+    trunk.position.set(x, trunkH / 2, z);
+    trunk.castShadow = true;
+    trunk.receiveShadow = true;
+    scene.add(trunk);
+    const canopy = kind === 'cone'
+      ? new THREE.Mesh(new THREE.ConeGeometry(canopyR, canopyR * 1.8, 8), canopyMats[greenIdx])
+      : new THREE.Mesh(new THREE.IcosahedronGeometry(canopyR, 0), canopyMats[greenIdx]);
+    canopy.position.set(x, trunkH + canopyR * 0.6, z);
+    canopy.castShadow = true;
+    canopy.receiveShadow = true;
+    scene.add(canopy);
+  }
+}
+
+// Shore rock lip (issue #13 §2): low rocks along the waterline, visual-only,
+// with gaps at the pier dock and the sword-cove access. Never a wall: the
+// net catches whatever rolls past into the sea.
+function buildShoreLip(scene) {
+  const rng = mulberry32(SHORE_LIP.seed);
+  const rockMat = M(COL_ROCK);
+  const inGap = (z) => SHORE_LIP.gaps.some(([g0, g1]) => z >= g0 && z <= g1);
+  for (let z = SHORE_LIP.z0; z <= SHORE_LIP.z1; z += 1.1) {
+    if (inGap(z)) continue;
+    if (rng() < 0.2) continue; // irregular, not a curb
+    const r = 0.3 + rng() * 0.35;
+    flatPart(GEO.dodec, rockMat, r * 1.6, r, r * 1.4,
+      SHORE_LIP.x + (rng() - 0.5) * 0.8, BEACH_BASE_Y + r * 0.35, z + (rng() - 0.5) * 0.5,
+      rng() * 3, scene);
+  }
 }
 
 function buildHills(scene) {
@@ -2042,7 +2101,10 @@ export function buildLevel(scene) {
   // buildReeds retired by issue #14: reeds lined the natural channel banks,
   // which are now straight concrete walls (reeds would sit inside the walls).
   buildBridges(scene);
-  buildWalls(scene);
+  buildEdgeCliffs(scene);
+  buildVillageHedges(scene);
+  buildForestRim(scene);
+  buildShoreLip(scene);
   buildHills(scene);
   buildTrees(scene);
   buildGiantTree(scene);

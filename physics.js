@@ -37,6 +37,8 @@ import {
   CHANNEL_Z1,
   CRATES,
   CUBE_MASS,
+  EDGE_BACKSTOPS,
+  EDGE_CLIFFS,
   FENCES,
   FIXED_DT,
   FOREST_BRIDGE,
@@ -67,16 +69,17 @@ import {
   STALL,
   TREES,
   TRUNK_RADIUS,
+  FOREST_RIM,
   VILLAGE_BARS,
+  VILLAGE_HEDGES,
   VILLAGE_TOWERS,
-  WALLS,
   WELL,
   ZONE_ARENA,
   ZONE_FOREST,
   ZONE_PASS,
   ZONE_VILLAGE,
 } from './constants.js';
-import { arenaRingLayout } from './game.js';
+import { arenaRingLayout, forestRimTrees } from './game.js';
 
 export function createWorld() {
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, GRAVITY_Y, 0) });
@@ -197,9 +200,22 @@ export function createStaticLevel(world) {
     addBox(x, baseY + h / 2, z, 0.7, h, 0.5);
   }
 
-  // Boundary walls (visible except the 'none' shoreline wall).
-  for (const [x, y, z, sx, sy, sz] of WALLS) {
-    addBox(x, y, z, sx, sy, sz);
+  // Diegetic outer boundaries (issue #13): cliffs, hedges, and the rim
+  // thicket band. No plain walls. Invisible backstops sit just behind the
+  // dressing and have no meshes: the player always meets rock, hedge, or
+  // thicket first. None of these are ground (grounded stays contact-based).
+  for (const [cx, cz, lx, lz, baseY, h] of EDGE_CLIFFS) {
+    addBox(cx, baseY + h / 2, cz, lx, h, lz);
+  }
+  for (const [cx, cz, lx, lz, baseY, h] of VILLAGE_HEDGES) {
+    addBox(cx, baseY + h / 2, cz, lx, h, lz);
+  }
+  for (const [tx, tz, trunkH] of forestRimTrees(FOREST_RIM)) {
+    const w = TRUNK_RADIUS * 2;
+    addBox(tx, trunkH / 2, tz, w, trunkH, w);
+  }
+  for (const [cx, cz, sx, sy, sz] of EDGE_BACKSTOPS) {
+    addBox(cx, 0, cz, sx, sy, sz);
   }
 
   // Crater ring (issue #9): the arena's true circular boundary. Same shared

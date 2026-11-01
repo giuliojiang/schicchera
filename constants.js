@@ -140,37 +140,69 @@ export const ZONE_PASS = { x0: 20, x1: 44, z0: -6, z1: 6 };
 export const ZONE_ARENA = { x0: 44, x1: 72, z0: -14, z1: 14 };
 export const ARENA_CENTER = [58, 0];
 
-// Shoreline: invisible wall here, water plane beyond (visual only).
+// Shoreline: the water plane starts here (visual only, no wall — see below).
 export const SHORE_X = -52;
 
-// Boundary walls. [cx, cy, cz, sx, sy, sz, style]
-// Styles: concrete (village, issue #14), dune (beach), treeline (forest), rock (pass/arena).
-export const WALLS = [
-  // Beach: tall north/south walls spanning all shelf levels (y -6..2), and a
-  // low dune ridge along the shore with a pier gap (z 4..6).
-  [-40, -2, -20.5, 42, 8, 1, 'dune'],
-  [-40, -2, 20.5, 42, 8, 1, 'dune'],
-  [SHORE_X, -5.4, -8.5, 1, 1.2, 25, 'dune'],
-  [SHORE_X, -5.4, 13.5, 1, 1.2, 15, 'dune'],
-  // Village: south + east segments (pass opening z in [-6,6]).
-  // Issue #14: concrete + planting instead of wood + hedge. Same line,
-  // same backstop rule — only the dressing material changes.
-  [0, 1, 20.5, 42, 2, 1, 'concrete'],
-  [20.5, 1, -13.25, 1, 2, 14.5, 'concrete'],
-  [20.5, 1, 13.25, 1, 2, 14.5, 'concrete'],
-  // Forest: west, east, north.
-  [-20.5, 1, -40, 1, 2, 42, 'treeline'],
-  [20.5, 1, -40, 1, 2, 42, 'treeline'],
-  [0, 1, -60.5, 42, 2, 1, 'treeline'],
-  // Pass corridor sides. Extended east (x .. 47.5) to meet the arena mouth
-  // gate pillars (issue #9): the corridor walls run into the gate, leaving
-  // no gap between the corridor and the crater ring ends.
-  [33.25, 1.5, -6.5, 28.5, 3, 1, 'rock'],
-  [33.25, 1.5, 6.5, 28.5, 3, 1, 'rock'],
-  // Arena (issue #9): no rectangular walls. The boundary is the circular
-  // collider ring (ARENA_RING_* + arenaRingLayout in game.js), rendered and
-  // collided from the same shared layout.
+// Edge design (issue #13): diegetic boundaries + respawn safety net. The
+// plain boundary walls are gone. Zones connect through paths, thicket doors,
+// terrace descents, and the pass; hard dressing lives only at the outer edge,
+// and the respawn net catches the sea, the lava moat, falls, and
+// out-of-bounds. Invisible backstops sit just BEHIND the outer dressing and
+// have no meshes: the player always meets thicket, rock, or hedge first.
+
+// Respawn safety net (§1, §3).
+export const RESPAWN_FADE_TIME = 0.3; // s, visual fade only, no text
+export const SEA_LEVEL = -6.5; // water plane height in the beach zone (== SEA_TOP_Y)
+export const FALL_Y_THRESHOLD = SEA_LEVEL - 5; // anywhere on the map
+export const MAP_CENTER = [0, 0]; // the outer playable radius is measured from here
+export const MAP_RADIUS = 85; // covers arena east (73) + margin; the sea triggers first out west
+export const SAFE_VY = 1.5; // |vertical velocity| at/below this counts as "near zero" for safe spots
+// Water volume bounds: x west of the shore and z inside the sea strip, with
+// y below SEA_LEVEL, counts as entering the water.
+export const SEA_REGION = { xMax: -50, z0: -32, z1: 32 };
+
+// Outer-edge cliffs: tall rock faces, impassable under horizontal-only flicks
+// (§2: a tall vertical face is a wall under these movement rules).
+// [cx, cz, lenX, lenZ, baseY, height]. Colliders match the visuals exactly.
+export const EDGE_CLIFFS = [
+  [-36, 20.8, 32, 2, -6, 8], // beach south outer rock face (spans all shelf levels)
+  [-36, -20.8, 32, 2, -6, 8], // beach north outer rock face
+  [33.75, 6.8, 27.5, 2, 0, 9], // pass north cliff (runs into the arena mouth gate)
+  [33.75, -6.8, 27.5, 2, 0, 9], // pass south cliff
 ];
+
+// Village boundary hedges (spec #5 dressing promoted to boundary, §2).
+// [cx, cz, lenX, lenZ, baseY, height]. The pass opening (z -6.5..6.5) stays open.
+export const VILLAGE_HEDGES = [
+  [0, 20.8, 40, 1.2, 0, 1.6], // south hedge
+  [20.8, -13.25, 1.2, 13.5, 0, 1.6], // east hedge, north of the pass
+  [20.8, 13.25, 1.2, 13.5, 0, 1.6], // east hedge, south of the pass
+];
+
+// Forest outer thicket band (spec #8 walls, thickened at the outer edge, §2).
+// Rim trees are generated from these params by forestRimTrees() in game.js so
+// physics trunks and level visuals can never drift apart. The south band
+// leaves the village gate (|x| < gateHalf) open: gaps stay as doors.
+export const FOREST_RIM = { x0: -20, x1: 20, z0: -60, z1: -20, inset: 0.7, spacing: 1.35, gateHalf: 2.8 };
+
+// Invisible backstops: physics-only boxes just behind the outer dressing.
+// They have no meshes (never the first thing touched). [cx, cz, sx, sy, sz].
+export const EDGE_BACKSTOPS = [
+  [-16, 23, 72, 26, 1], // south outer, behind the beach cliff + village hedge
+  [-36, -23, 32, 26, 1], // beach north outer, behind the rock face
+  [-23, -40, 1, 26, 44], // forest west outer, behind the rim band
+  [23, -40, 1, 26, 44], // forest east outer, behind the rim band
+  [0, -63, 44, 26, 1], // forest north outer, behind the rim band
+  [23.5, -13.25, 1, 26, 13.5], // village east outer, behind the hedges
+  [23.5, 13.25, 1, 26, 13.5], // village east outer, behind the hedges
+  [33.75, 9.5, 30, 26, 1], // pass north outer, behind the cliff
+  [33.75, -9.5, 30, 26, 1], // pass south outer, behind the cliff
+];
+
+// Shore rock lip (visual-only, no colliders): low rocks along the waterline
+// with gaps at the pier dock and the sword-cove access. Never a wall at the
+// waterline: a flick dying mysteriously at the shore is worse than respawn.
+export const SHORE_LIP = { x: -51.5, z0: -20, z1: 20, gaps: [[3.5, 6.5], [-1, 2]], seed: 13 };
 
 // Hills: buried spheres the player rolls over. [cx, cy, cz, radius]
 // Beach dunes sit on the lowered beach (base y -6); crests stay ~1.5 above it.

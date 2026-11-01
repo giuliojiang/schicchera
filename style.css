@@ -22,6 +22,17 @@ html, body {
   height: 100%;
 }
 
+/* Respawn fade (issue #13): a visual blink only, no text. Covers the snap
+   back to the last safe spot; control is already restored underneath. */
+#respawnFade {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
 /* End screens: icon pictograms only, no text (spec section 11). */
 .overlay {
   position: fixed;

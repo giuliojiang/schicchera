@@ -50,6 +50,8 @@ export function initDebug(ctx) {
       phase: s.phase,
       zone: s.zone,
       pickups: s.pickups,
+      safeSpot: s.safeSpot || null,
+      lastRespawn: s.lastRespawn || null,
       orbitAngle: +s.orbitAngle.toFixed(4),
       cam: s.cam,
       anchor: s.anchor,
