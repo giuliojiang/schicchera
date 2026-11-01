@@ -2164,7 +2164,8 @@ export function buildPlayerMesh() {
 }
 
 // Blender source of the character. Body spans exactly +-1 on every axis
-// (measured), so x0.5 normalizes it onto the 1-unit physics cube. Face and
+// (measured), so PLAYER_SIZE/2 normalizes it onto the physics cube
+// (issue #15: 0.25 onto the half-size cube). Face and
 // eyes look down +Z; the three dark socket plates (side pair + mouth) take
 // the weapons. Textures and materials come from the file.
 const CUBEBOT_URL = './blend/cubebot.glb';
@@ -2216,19 +2217,20 @@ function buildLegacyPlayerMesh() {
   g.userData.bodyMat = cube.material; // damage flash target (spec section 11)
   const eyeMat = matte(COL_EYE, { roughness: 0.8 });
   const eyes = [];
-  for (const ex of [-0.2, 0.2]) {
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.24, 0.06), eyeMat);
-    eye.position.set(ex, 0.1, s / 2 + 0.01);
+  // Issue #15: eye/trim offsets scale with s so the fallback matches the half-size cube.
+  for (const ex of [-0.2 * s, 0.2 * s]) {
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.16 * s, 0.24 * s, 0.06 * s), eyeMat);
+    eye.position.set(ex, 0.1 * s, s / 2 + 0.01 * s);
     g.add(eye);
     eyes.push(eye);
   }
   g.userData.eyes = eyes; // squint targets (issue #4: eyes narrow with charge)
   // Cream trim band so the roll direction reads at a glance.
   const trim = new THREE.Mesh(
-    new THREE.BoxGeometry(s + 0.02, 0.14, s + 0.02),
+    new THREE.BoxGeometry(s + 0.02 * s, 0.14 * s, s + 0.02 * s),
     matte(0xf2e6c8, { roughness: 0.7 })
   );
-  trim.position.set(0, -0.28, 0);
+  trim.position.set(0, -0.28 * s, 0);
   g.add(trim);
   return g;
 }
@@ -2312,6 +2314,10 @@ export function buildWeaponMesh(id) {
   const glintMats = [];
   const builders = { dagger: buildDaggerMesh, sword: buildSwordMesh, hammer: buildHammerMesh };
   const group = builders[id](glintMats);
+  // Issue #15: half-size character carries half-size weapons so visual and
+  // compound collider stay matched. Pickups use the same builder, so what
+  // you see floating is what attaches.
+  group.scale.setScalar(0.5);
   return { group, glintMats };
 }
 

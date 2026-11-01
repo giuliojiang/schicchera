@@ -32,8 +32,8 @@ export const BOSS_SPAWN_Y = 2;
 export const COMBAT_COOLDOWN = 1; // s between damage resolutions (one touch = 1 HP max)
 export const MOMENTUM_TIE_EPS = 0.1; // |Δp| at/below this = tie, bounce, no damage
 
-export const CAMERA_DISTANCE = 8;
-export const CAMERA_HEIGHT = 5;
+export const CAMERA_DISTANCE = 5; // issue #15: 8 -> 5, closer for the "in the world" feeling
+export const CAMERA_HEIGHT = 2.5; // issue #15: 5 -> 2.5, lower so slabs rise above the player
 export const CAMERA_ANCHOR_RATE = 4; // 1/s anchor easing toward player XZ (issue #7)
 export const CAMERA_DEADZONE = 0.75; // units, anchor deadzone (issue #7)
 export const CAMERA_HEIGHT_RATE = 2; // 1/s smoothed-ground easing while grounded (issue #7)
@@ -44,7 +44,7 @@ export const CAMERA_COLLISION_MARGIN = 0.3; // camera stops this far short of a 
 export const CAMERA_MIN_DISTANCE = 1.5; // camera never closer; stays out of the character (issue #12)
 export const CAMERA_DISTANCE_RATE = 4; // 1/s smoothed distance toward the raycast target (issue #12)
 export const CAMERA_NEAR = 0.1; // camera.near; avoids slicing into a wall when pulled close (issue #12)
-export const CAMERA_RAY_ORIGIN_HEIGHT = 0.5; // ray starts above the character center (issue #12)
+export const CAMERA_RAY_ORIGIN_HEIGHT = 0.25; // issue #15: 0.5 -> 0.25, scales with the half-size character
 export const ORBIT_SPEED = 2.2; // rad/s for A/D
 
 export const DAMAGE_FLASH_TIME = 0.3; // s
@@ -53,7 +53,7 @@ export const DAMAGE_FLASH_TIME = 0.3; // s
 export const FIXED_DT = 1 / 60;
 export const MAX_FRAME_DT = 0.1; // clamp tab-switch jumps
 export const GRAVITY_Y = -9.82;
-export const PLAYER_SIZE = 1;
+export const PLAYER_SIZE = 0.5; // issue #15: 1 -> 0.5, half-size character; collider + cubebot + legacy mesh follow automatically
 export const PLAYER_SPAWN = [0, 2, 6];
 export const GROUND_FRICTION = 0.06;
 export const GROUND_RESTITUTION = 0.05;
@@ -70,9 +70,9 @@ export const LAUNCH_STRETCH_TIME = 0.16; // s of un-squash pop on release
 // chargeFraction that sets flick speed, so the visuals never lie about power.
 // Palette is gold-white only: red belongs to the damage flash and the lava.
 export const CHARGE_MOTES = 150; // player swarm pool (fixed, no per-frame alloc)
-export const CHARGE_MOTE_SIZE = 0.22; // world units, sizeAttenuation on
-export const CHARGE_MOTE_R_OUT = 1.7; // orbit radius at zero charge
-export const CHARGE_MOTE_R_IN = 0.95; // orbit radius at full charge (hugs cube)
+export const CHARGE_MOTE_SIZE = 0.16; // issue #15: 0.22 -> 0.16, shrinks with the body but bumped for readability (visual-only)
+export const CHARGE_MOTE_R_OUT = 0.85; // issue #15: 1.7 -> 0.85, hugs the half-size cube
+export const CHARGE_MOTE_R_IN = 0.475; // issue #15: 0.95 -> 0.475, hugs the half-size cube
 export const CHARGE_BURST_TIME = 0.4; // s the release burst takes to fade
 export const BOSS_MOTES = 120; // boss wind-up swarm pool
 export const BOSS_MOTE_SIZE = 0.26;
@@ -83,7 +83,7 @@ export const CHARGE_GLOW_HIGH = 0xfff3c4; // bright gold-white at full charge
 export const CHARGE_GLOW_MAX = 0.12; // emissive intensity at full charge
 export const CHARGE_PULSE_AMP = 0.1; // full-charge pulse amplitude
 export const CHARGE_PULSE_FREQ = 10; // rad/s full-charge pulse
-export const TREMBLE_POS = 0.035; // m, max mesh-only position jitter
+export const TREMBLE_POS = 0.018; // issue #15: 0.035 -> 0.018, scales with the half-size body (visual-only)
 export const TREMBLE_ROT = 0.03; // rad, max mesh-only rotation jitter
 export const EYE_SQUINT = 0.7; // max eye Y compression at full charge
 export const CHARGE_MOTE_TINT = 0xffe9b0; // warm gold-white motes (never red)
@@ -183,7 +183,7 @@ export const VILLAGE_HEDGES = [
 // Rim trees are generated from these params by forestRimTrees() in game.js so
 // physics trunks and level visuals can never drift apart. The south band
 // leaves the village gate (|x| < gateHalf) open: gaps stay as doors.
-export const FOREST_RIM = { x0: -20, x1: 20, z0: -60, z1: -20, inset: 0.7, spacing: 1.35, gateHalf: 2.8 };
+export const FOREST_RIM = { x0: -20, x1: 20, z0: -60, z1: -20, inset: 0.7, spacing: 0.95, gateHalf: 2.8 }; // issue #15: 1.35 -> 0.95, restores the rim wall for the half-size body (doors stay >=2)
 
 // Invisible backstops: physics-only boxes just behind the outer dressing.
 // They have no meshes (never the first thing touched). [cx, cz, sx, sy, sz].
@@ -219,7 +219,9 @@ export const HILLS = [
 
 // Trees: [x, z, trunkH, canopyR, canopyKind, greenIdx].
 // Forest (issue #8): 53 trees in 6 thicket walls + entrance scatter + slalom
-// posts. Walls use exact 1.3-1.4 spacing (impassable); gaps are 2.8+ (doors).
+// posts, plus issue #15 densification midpoints. Walls use exact 1.3-1.4
+// spacing with 0.7 midpoints (impassable for the half-size body); gaps are
+// 2.8+ (doors).
 // Path-side trees are tall (3.5+) with small canopies so the camera looks
 // under them; thicket interiors stay low and dense. Validated: every trunk is
 // 2+ from path centerlines (except slalom/door exceptions) and no two trunks
@@ -295,6 +297,34 @@ export const TREES = [
   [5, -16, 2.4, 1.5, 'cone', 3],
   [-18, -15, 2.8, 1.7, 'blob', 2],
   [17.5, 7.5, 2.0, 1.3, 'cone', 1],
+  // Issue #15 densification: midpoint trunks restoring the 1.3-1.4 walls for
+  // the half-size body. Each sits midway between two wall trunks above, so
+  // wall gaps go 1.4 -> 0.7 (clear ~0.0, blocked) while the 2.8 nook/door gaps
+  // stay 2.8 (clear ~2.1, still pass). C2 divider (1.16) already blocks the
+  // smaller body and needs no midpoints. Grove ring (3.4) untouched.
+  [-8.5, -27.7, 2.54, 1.74, 'blob', 2],
+  [-8.5, -31.9, 2.41, 1.76, 'cone', 3],
+  [-8.5, -33.3, 2.29, 1.75, 'blob', 0],
+  [-7.8, -34, 2.47, 1.71, 'cone', 1],
+  [-6.4, -34, 2.54, 1.82, 'blob', 2],
+  [11.5, -28.7, 2.51, 1.85, 'cone', 0],
+  [11.5, -30.1, 2.67, 1.71, 'blob', 1],
+  [11.5, -34.3, 2.31, 1.86, 'cone', 2],
+  [13.5, -28, 2.44, 1.76, 'blob', 3],
+  [-6, -40.2, 2.24, 1.99, 'blob', 0],
+  [-6, -41.6, 2.33, 1.85, 'cone', 1],
+  [-6, -45.8, 2.4, 1.74, 'blob', 2],
+  [-6, -47.2, 2.56, 1.71, 'cone', 3],
+  [7, -40.7, 3.62, 1.4, 'blob', 0],
+  [7, -42.1, 3.54, 1.43, 'cone', 1],
+  [7, -43.5, 3.54, 1.38, 'blob', 2],
+  [7, -44.9, 3.72, 1.33, 'cone', 3],
+  [7, -46.3, 3.85, 1.34, 'blob', 0],
+  [5.7, -53, 2.44, 1.55, 'blob', 1],
+  [7.1, -53, 2.38, 1.65, 'cone', 2],
+  [8.5, -53, 2.35, 1.78, 'blob', 3],
+  [9.9, -53, 2.54, 1.79, 'cone', 0],
+  [5, -55.1, 2.49, 1.76, 'blob', 1],
 ];
 export const TRUNK_RADIUS = 0.35;
 
@@ -524,7 +554,7 @@ export const PICKUPS = [
   ['sword', -49, -5.2, 3], // floats over its cove pedestal (beach base -6)
   ['hammer', -11, 1.0, -53],
 ];
-export const PICKUP_TOUCH_DIST = 1.5;
+export const PICKUP_TOUCH_DIST = 1.8; // issue #15: 1.5 -> 1.8, smaller center sits lower so the plaza dagger needs a wider radius (pedestal untouched)
 
 // Beach terraces (issue #6): layered shelves stepping down east -> west.
 // S0 top is flush with the village (y 0); the beach proper sits at -6;
@@ -634,14 +664,17 @@ export const BEACH_TUFTS_PER_SHELF = [10, 8, 6];
 // dark side socket plates (right = dagger, left = sword, mirrored as before),
 // the hammer lies head-forward out of the mouth socket plate. rot is the
 // visual euler applied to the weapon group.
+// Issue #15: all pos/collider/half values halved with the half-size character
+// so visuals and compound colliders stay matched. Rotations unchanged.
 export const ANCHOR = {
-  dagger: { pos: [0.59, 0.13, -0.04], collider: [0.7, 0.13, -0.04], half: [0.42, 0.13, 0.07], rot: [0, 0, 0] },
-  sword: { pos: [-0.59, -0.06, -0.03], collider: [-0.9, -0.06, -0.03], half: [0.65, 0.15, 0.08], rot: [0, Math.PI, 0] },
-  hammer: { pos: [0.12, -0.19, 0.35], collider: [0.12, -0.19, 0.35], half: [0.2, 0.2, 0.5], rot: [Math.PI / 2, 0, 0] },
+  dagger: { pos: [0.295, 0.065, -0.02], collider: [0.35, 0.065, -0.02], half: [0.21, 0.065, 0.035], rot: [0, 0, 0] },
+  sword: { pos: [-0.295, -0.03, -0.015], collider: [-0.45, -0.03, -0.015], half: [0.325, 0.075, 0.04], rot: [0, Math.PI, 0] },
+  hammer: { pos: [0.06, -0.095, 0.175], collider: [0.06, -0.095, 0.175], half: [0.1, 0.1, 0.25], rot: [Math.PI / 2, 0, 0] },
 };
 // Victory anchor: the boss ball rides on the back (-Z, opposite the face).
-// Raised so its bottom sits ~flush with the cube's bottom.
-export const BOSS_ANCHOR = { pos: [0, 0.35, -1.0], collider: [0, 0.35, -1.0] };
+// Issue #15: anchor halved with the character; the boss ball itself keeps its
+// current size (spec: it reads relatively bigger against the smaller player).
+export const BOSS_ANCHOR = { pos: [0, 0.175, -0.5], collider: [0, 0.175, -0.5] };
 
 // Fog per zone (color-as-map). Density shared; colors lerp on crossing.
 export const FOG_DENSITY = 0.012;

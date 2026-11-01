@@ -1076,10 +1076,11 @@ function stepSim(dt) {
         const r2 = streaks.random() * 2 - 1;
         const r3 = streaks.random();
         // Spawn behind the cube, line along the motion, faint and short.
+        // Issue #15: offsets halved with the half-size character.
         streaks.spawn(
-          playerBody.position.x - ix * (0.8 + r3 * 0.8) - iz * r1 * 0.3,
-          playerBody.position.y - iy * 0.5 + r2 * 0.3,
-          playerBody.position.z - iz * (0.8 + r3 * 0.8) + ix * r1 * 0.3,
+          playerBody.position.x - ix * (0.4 + r3 * 0.4) - iz * r1 * 0.15,
+          playerBody.position.y - iy * 0.25 + r2 * 0.15,
+          playerBody.position.z - iz * (0.4 + r3 * 0.4) + ix * r1 * 0.15,
           ix, iy, iz,
           STREAK_LEN_MIN + streaks.random() * (STREAK_LEN_MAX - STREAK_LEN_MIN),
           SPEED_STREAK_LIFE,
